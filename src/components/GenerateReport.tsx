@@ -215,7 +215,7 @@ const GenerateReport: React.FC<GenerateReportProps> = ({ json1, json2, tolerance
             sx={{ backgroundColor: "#3b82f6", maxWidth: "200px" }}
           >
             Generate Report
-          </Button>
+          </Button> 
         </Box>
       </Box>
     </Box>
