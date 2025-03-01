@@ -33,9 +33,10 @@ interface JsonDiffViewerProps {
   tolerance?: number;
   shouldExpand?: boolean;
   setShouldExpand?: (value: boolean) => void;
+  diffId?: string; // New prop for specific diff ID
 }
 
-const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance = 0.0001, shouldExpand = false, setShouldExpand }) => {
+const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance = 0.0001, shouldExpand = false, setShouldExpand, diffId }) => {
   const [diffTree, setDiffTree] = useState<any[] | null>(null);
   const [diffTable, setDiffTable] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -54,13 +55,19 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
     linux: false,
   });
 
+  const [diffTypes, setDiffTypes] = useState({
+    mismatches: true, // Default checked
+    missingLinux: true,
+    missingSun: true,
+  });
+
   const [expandedItems, setExpandedItems] = useState<string[]>([]); // Track expanded items
 
   const colorOptions = ["red", "orange", "yellow", "green", "blue", "purple", "gray", "white"];
 
   // Memoize json1 and json2 to stabilize their references in useEffect
-  const memoJson1 = useMemo(() => JSON.parse(JSON.stringify(json1)), [json1]);
-  const memoJson2 = useMemo(() => JSON.parse(JSON.stringify(json2)), [json2]);
+  const memoJson1 = useMemo(() => JSON.parse(JSON.stringify(json1)), [json1, diffId]); // Recompute when diffId changes
+  const memoJson2 = useMemo(() => JSON.parse(JSON.stringify(json2)), [json2, diffId]); // Recompute when diffId changes
 
   useEffect(() => {
     console.log("shouldExpand changed to:", shouldExpand);
@@ -91,6 +98,7 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
               label: `${k}: ${JSON.stringify(obj1[k])} (Missing LINUX)`, 
               color: missingLinuxColor,
               path: currentPath,
+              diffType: "missingLinux", // Mark as missing LINUX
             });
           } else if (!(k in obj1)) {
             result.push({ 
@@ -98,11 +106,12 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
               label: `${k}: ${JSON.stringify(obj2[k])} (Missing SUN)`, 
               color: missingSunColor,
               path: currentPath,
+              diffType: "missingSun", // Mark as missing SUN
             });
           } else if (typeof obj1[k] === "object" && typeof obj2[k] === "object") {
             const children = buildDiffTree(obj1[k], obj2[k], uniqueId, currentPath);
             if (children.length > 0) {
-              result.push({ id: uniqueId, label: k, children, path: currentPath });
+              result.push({ id: uniqueId, label: k, children, path: currentPath, diffType: null });
             }
           } else if (obj1[k] !== obj2[k]) {
             if (typeof obj1[k] === "number" && typeof obj2[k] === "number") {
@@ -113,6 +122,7 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
               label: `${k}: ${obj1[k]} → ${obj2[k]}`, 
               color: mismatchColor,
               path: currentPath,
+              diffType: "mismatches", // Mark as mismatch
             });
           }
         });
@@ -132,15 +142,19 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
             result.push(...buildDiffTable(value1, value2, fullKey));
           } else {
             let color = "white";
+            let diffType: "mismatches" | "missingLinux" | "missingSun" | null = null;
             if (!(k in obj2)) {
               color = missingLinuxColor;
+              diffType = "missingLinux";
             } else if (!(k in obj1)) {
               color = missingSunColor;
+              diffType = "missingSun";
             } else if (value1 !== value2) {
               if (typeof value1 === "number" && typeof value2 === "number") {
                 if (Math.abs(value1 - value2) <= tolerance) return;
               }
               color = mismatchColor;
+              diffType = "mismatches";
             } else {
               return;
             }
@@ -150,6 +164,7 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
               sun: value1 !== undefined ? JSON.stringify(value1) : "missing",
               linux: value2 !== undefined ? JSON.stringify(value2) : "missing",
               color,
+              diffType,
             });
           }
         });
@@ -159,18 +174,39 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
       const treeDiff = buildDiffTree(memoJson1, memoJson2);
       const tableDiff = buildDiffTable(memoJson1, memoJson2);
       
-      setDiffTree(treeDiff.length > 0 ? treeDiff : [{ id: "no-diff-0", label: "No differences found", color: "gray", path: [] }]);
-      setDiffTable(tableDiff.length > 0 ? tableDiff : [{ key: "No differences", sun: "", linux: "", color: "gray" }]);
+      setDiffTree(treeDiff.length > 0 ? treeDiff : [{ id: "no-diff-0", label: "No differences found", color: "gray", path: [], diffType: null }]);
+      setDiffTable(tableDiff.length > 0 ? tableDiff : [{ key: "No differences", sun: "", linux: "", color: "gray", diffType: null }]);
     }
-  }, [memoJson1, memoJson2, mismatchColor, missingSunColor, missingLinuxColor, tolerance]);
+  }, [memoJson1, memoJson2, mismatchColor, missingSunColor, missingLinuxColor, tolerance, diffId]);
 
   useEffect(() => {
     if (!diffTree || !diffTable) return;
 
+    // Check if all diffTypes are unchecked
+    const allDiffTypesUnchecked = !diffTypes.mismatches && !diffTypes.missingLinux && !diffTypes.missingSun;
+
     const filterTree = (nodes: any[]): any[] => {
       return nodes
         .map((node) => {
-          const matches = searchFields.fieldName && node.label.toLowerCase().includes(searchQuery.toLowerCase());
+          // Skip if all diffTypes are unchecked
+          if (allDiffTypesUnchecked) return null;
+
+          // Apply diffTypes filtering first, independently of search
+          const isAllowedDiffType = !node.diffType || diffTypes[node.diffType as keyof typeof diffTypes];
+          if (!isAllowedDiffType) return null;
+
+          // Only show Missing LINUX (red) if that's the only type checked
+          if (diffTypes.missingLinux && !diffTypes.mismatches && !diffTypes.missingSun) {
+            if (node.diffType !== "missingLinux") return null;
+          }
+
+          // Only show Missing SUN (orange) if that's the only type checked
+          if (diffTypes.missingSun && !diffTypes.mismatches && !diffTypes.missingLinux) {
+            if (node.diffType !== "missingSun") return null;
+          }
+
+          // Apply search filtering if there's a query
+          const matches = searchQuery && searchFields.fieldName && node.label.toLowerCase().includes(searchQuery.toLowerCase());
           const filteredChildren = node.children ? filterTree(node.children) : null;
           if (matches || (filteredChildren && filteredChildren.length > 0)) {
             return { ...node, children: filteredChildren };
@@ -181,25 +217,57 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
     };
 
     const filterTable = (rows: any[]): any[] => {
-      return rows.filter((item) => {
-        const fieldNameMatch = searchFields.fieldName && item.key.toLowerCase().includes(searchQuery.toLowerCase());
-        const sunMatch = searchFields.sun && item.sun.toLowerCase().includes(searchQuery.toLowerCase());
-        const linuxMatch = searchFields.linux && item.linux.toLowerCase().includes(searchQuery.toLowerCase());
-        return fieldNameMatch || sunMatch || linuxMatch;
-      });
+      // Skip if all diffTypes are unchecked
+      if (allDiffTypesUnchecked) return [{ key: "No differences", sun: "", linux: "", color: "gray", diffType: null }];
+
+      // Apply diffTypes filtering first, independently of search
+      let filteredByDiffType = rows.filter((item) => !item.diffType || diffTypes[item.diffType as keyof typeof diffTypes]);
+
+      // Only show Missing LINUX (red) if that's the only type checked
+      if (diffTypes.missingLinux && !diffTypes.mismatches && !diffTypes.missingSun) {
+        filteredByDiffType = filteredByDiffType.filter((item) => item.diffType === "missingLinux");
+      }
+
+      // Only show Missing SUN (orange) if that's the only type checked
+      if (diffTypes.missingSun && !diffTypes.mismatches && !diffTypes.missingLinux) {
+        filteredByDiffType = filteredByDiffType.filter((item) => item.diffType === "missingSun");
+      }
+
+      // Apply search filtering if there's a query
+      if (searchQuery) {
+        return filteredByDiffType.filter((item) => {
+          const fieldNameMatch = searchFields.fieldName && item.key.toLowerCase().includes(searchQuery.toLowerCase());
+          const sunMatch = searchFields.sun && item.sun.toLowerCase().includes(searchQuery.toLowerCase());
+          const linuxMatch = searchFields.linux && item.linux.toLowerCase().includes(searchQuery.toLowerCase());
+          return fieldNameMatch || sunMatch || linuxMatch;
+        });
+      }
+      return filteredByDiffType;
     };
 
-    const filteredTreeData = searchQuery ? filterTree(diffTree) : diffTree;
-    const filteredTableData = searchQuery ? filterTable(diffTable) : diffTable;
+    let filteredTreeData = searchQuery ? filterTree(diffTree) : diffTree.filter((node) => !allDiffTypesUnchecked && (!node.diffType || diffTypes[node.diffType as keyof typeof diffTypes]));
+    let filteredTableData = searchQuery ? filterTable(diffTable) : diffTable.filter((item) => !allDiffTypesUnchecked && (!item.diffType || diffTypes[item.diffType as keyof typeof diffTypes]));
 
-    setFilteredTree(filteredTreeData.length > 0 ? filteredTreeData : [{ id: "no-match-0", label: "No matches found", color: "gray", path: [] }]);
-    setFilteredTable(filteredTableData.length > 0 ? filteredTableData : [{ key: "No matches", sun: "", linux: "", color: "gray" }]);
+    // Special case: If only Missing LINUX is checked, filter to show only red entries
+    if (diffTypes.missingLinux && !diffTypes.mismatches && !diffTypes.missingSun) {
+      filteredTreeData = filteredTreeData.filter((node) => node.diffType === "missingLinux");
+      filteredTableData = filteredTableData.filter((item) => item.diffType === "missingLinux");
+    }
+
+    // Special case: If only Missing SUN is checked, filter to show only orange entries
+    if (diffTypes.missingSun && !diffTypes.mismatches && !diffTypes.missingLinux) {
+      filteredTreeData = filteredTreeData.filter((node) => node.diffType === "missingSun");
+      filteredTableData = filteredTableData.filter((item) => item.diffType === "missingSun");
+    }
+
+    setFilteredTree(filteredTreeData.length > 0 ? filteredTreeData : [{ id: "no-match-0", label: "No differences found", color: "gray", path: [], diffType: null }]);
+    setFilteredTable(filteredTableData.length > 0 ? filteredTableData : [{ key: "No differences", sun: "", linux: "", color: "gray", diffType: null }]);
 
     if (filteredTreeData) {
       const allIds = extractAllIds(filteredTreeData);
       setExpandedItems(allIds);
     }
-  }, [searchQuery, diffTree, diffTable, searchFields]);
+  }, [searchQuery, diffTree, diffTable, searchFields, diffTypes, diffId]);
 
   // Helper function to extract all node IDs for expansion
   const extractAllIds = (nodes: any[]): string[] => {
@@ -236,6 +304,13 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
     setSearchFields((prev) => ({
       ...prev,
       [field]: event.target.checked,
+    }));
+  };
+
+  const handleDiffTypeChange = (type: keyof typeof diffTypes) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    setDiffTypes((prev) => ({
+      ...prev,
+      [type]: event.target.checked,
     }));
   };
 
@@ -287,7 +362,7 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
         </FormControl>
       </div>
 
-      {/* Search Box, Checkboxes, and Note */}
+      {/* Search Box, Checkboxes, and Notes */}
       <div style={{ display: "flex", flexDirection: "column", gap: "8px", justifyContent: "center", marginBottom: "16px", alignItems: "center" }}>
         <div style={{ display: "flex", flexDirection: "row", gap: "16px", alignItems: "center" }}>
           <TextField
@@ -317,6 +392,27 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
         <Tooltip title="Search filtering with these checkboxes applies only to the Table View, not the Tree View." placement="top" arrow>
           <Typography variant="caption" sx={{ color: "white", textAlign: "center" }}>
             * Search filtering applies only to Table View
+          </Typography>
+        </Tooltip>
+        <div style={{ display: "flex", flexDirection: "row", gap: "16px", alignItems: "center" }}>
+          <FormGroup>
+            <FormControlLabel
+              control={<Checkbox checked={diffTypes.mismatches} onChange={handleDiffTypeChange("mismatches")} sx={{ color: "white" }} />}
+              label={<span style={{ color: "white" }}>Mismatches</span>}
+            />
+            <FormControlLabel
+              control={<Checkbox checked={diffTypes.missingLinux} onChange={handleDiffTypeChange("missingLinux")} sx={{ color: "white" }} />}
+              label={<span style={{ color: "white" }}>Missing LINUX</span>}
+            />
+            <FormControlLabel
+              control={<Checkbox checked={diffTypes.missingSun} onChange={handleDiffTypeChange("missingSun")} sx={{ color: "white" }} />}
+              label={<span style={{ color: "white" }}>Missing SUN</span>}
+            />
+          </FormGroup>
+        </div>
+        <Tooltip title="These filters apply to both Tree View and Table View to show only specific types of differences, regardless of search." placement="top" arrow>
+          <Typography variant="caption" sx={{ color: "white", textAlign: "center" }}>
+            * Difference type filtering applies to both views, regardless of search
           </Typography>
         </Tooltip>
       </div>

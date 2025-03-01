@@ -1,6 +1,7 @@
-import React, { useState, useRef } from "react";
-import { Button, TextField, MenuItem, Select, FormControl, InputLabel, Tooltip } from "@mui/material";
-import { BakeryDining, Compare, FindInPage } from "@mui/icons-material";
+import React, { useState, useRef, forwardRef, useImperativeHandle } from "react";
+import { Button, TextField, MenuItem, Select, FormControl, InputLabel, Tooltip, Typography } from "@mui/material";
+import { Compare } from "@mui/icons-material";
+import { fetchDiffData, fetchEnvironmentsToDiff, fetchServicesToDiff } from "../services/dataService";
 
 interface JsonInputProps {
   json1: any | null;
@@ -12,10 +13,16 @@ interface JsonInputProps {
   setEnvironment?: (env: string) => void;
   setTolerance?: (tolerance: number) => void;
   setServiceToDiff?: (serviceToDiff: string) => void;
-  onCompare?: () => void; // Define onCompare as an optional callback
+  onCompare?: () => void;
+  diffId?: string | null;
+  setDiffId?: (diffId: string | null) => void;
+  setJsonInput?: (json1Str: string, json2Str: string) => void;
+  pxnumIn?: string | null;
+  environmentIn?: string | null;
+  serviceIn?: string | null;
 }
 
-const JsonInput: React.FC<JsonInputProps> = ({
+const JsonInput = forwardRef(({
   json1,
   setJson1,
   json2,
@@ -26,45 +33,134 @@ const JsonInput: React.FC<JsonInputProps> = ({
   setTolerance,
   setServiceToDiff,
   onCompare,
-}) => {
-  const [json1Input, setJson1Input] = useState("{\n  \"tradeId\": \"TRADE-001\",\n  \"tradeDate\": \"2025-03-01\",\n  \"quantity\": 1000,\n  \"price\": 50.25,\n  \"currency\": \"USD\",\n  \"status\": \"EXECUTED\",\n  \"allocationId\": \"ALLOC-001\",\n  \"accountId\": \"ACC-123\",\n  \"allocatedQuantity\": 1000,\n  \"allocatedPrice\": 50.25,\n  \"allocationDate\": \"2025-03-02\",\n  \"trader\": {\n    \"traderId\": \"TRD-001\",\n    \"traderName\": \"John Doe\",\n    \"department\": \"Equities\",\n    \"location\": \"New York\"\n  },\n  \"counterparty\": {\n    \"counterpartyId\": \"CP-001\",\n    \"counterpartyName\": \"Global Bank\",\n    \"country\": \"USA\"\n  },\n  \"commission\": 0.05,\n  \"fee\": 10.00,\n  \"netValue\": 50150.00,\n  \"executionTime\": \"2025-03-01T10:00:00Z\",\n  \"settlementDate\": \"2025-03-04\",\n  \"isConfirmed\": true,\n  \"notes\": \"Standard equity trade\",\n  \"priority\": \"HIGH\",\n  \"tradeType\": \"BUY\",\n  \"additionalData\": {\n    \"clearingHouse\": \"NYSE\",\n    \"clearingId\": \"CL-001\",\n    \"clearingDate\": \"2025-03-03\"\n  }\n}");
-  const [json2Input, setJson2Input] = useState("{\n  \"tradeId\": \"TRADE-001\",\n  \"tradeDate\": \"2025-03-01\",\n  \"quantity\": 1000,\n  \"price\": 50.26,\n  \"currency\": \"USD\",\n  \"status\": \"EXECUTED\",\n  \"allocationId\": \"ALLOC-002\",\n  \"accountId\": \"ACC-124\",\n  \"allocatedQuantity\": 950,\n  \"allocatedPrice\": 50.26,\n  \"allocationDate\": \"2025-03-03\",\n  \"trader\": {\n    \"traderId\": \"TRD-001\",\n    \"traderName\": \"Jane Doe\",\n    \"department\": \"Equities\",\n    \"location\": \"London\"\n  },\n  \"counterparty\": {\n    \"counterpartyId\": \"CP-002\",\n    \"counterpartyName\": \"International Bank\",\n    \"country\": \"UK\"\n  },\n  \"commission\": 0.06,\n  \"fee\": 12.00,\n  \"netValue\": 50162.00,\n  \"executionTime\": \"2025-03-01T10:05:00Z\",\n  \"settlementDate\": \"2025-03-05\",\n  \"isConfirmed\": false,\n  \"priority\": \"MEDIUM\",\n  \"tradeType\": \"BUY\",\n  \"additionalData\": {\n    \"clearingHouse\": \"NASDAQ\",\n    \"clearingId\": \"CL-002\",\n    \"clearingDate\": \"2025-03-04\"\n  },\n  \"newField\": \"New Allocation Note\"\n}");
-  const [diffingId, setDiffingIdLocal] = useState("1234-5478-9XXX");
-  const [pxnum, setPxnumLocal] = useState("999");
-  const [environment, setEnvironmentLocal] = useState("DEV");
+  diffId,
+  setDiffId,
+  setJsonInput,
+  pxnumIn,
+  environmentIn,
+  serviceIn,
+}: JsonInputProps, ref) => {
+  const [json1Input, setJson1Input] = useState(json1 ? JSON.stringify(json1, null, 2) : "{\n  \"id\": 1,\n  \"name\": \"Alice\",\n  \"age\": 25,\n  \"double\": 1.123456789,\n  \"double2\": 1.123456789,\n  \"address\": {\n    \"city\": \"New York\",\n    \"zip\": \"10001\"\n  }\n}");
+  const [json2Input, setJson2Input] = useState(json2 ? JSON.stringify(json2, null, 2) : "{\n  \"id\": 1,\n  \"name\": \"Alice B.\",\n  \"age\": 26,\n  \"double\": 1.1,\n  \"double2\": 1.1234,\n  \"address\": {\n    \"city\": \"San Francisco\",\n    \"zip\": \"94105\"\n  }\n}");
+  const [diffingId, setDiffingIdLocal] = useState(diffId ? diffId : "1234-5478-9XXX");
+  const [pxnum, setPxnumLocal] = useState(pxnumIn ? pxnumIn : "999");
+  const [environment, setEnvironmentLocal] = useState(environmentIn ? environmentIn : "DEV");
   const [tolerance, setToleranceLocal] = useState("0.0001");
-  const [serviceToDiff, setServiceToDiffLocal] = useState("TKTAPIAccessor");
+  const [serviceToDiff, setServiceToDiffLocal] = useState(serviceIn ? serviceIn : "TKTAPIAccessor");
+  const [noResults, setNoResults] = useState(false); // State for no results (Find Results and Diff/Compare)
+  const [invalidInput, setInvalidInput] = useState(false); // State for invalid JSON input
 
   const containerRef = useRef<HTMLDivElement>(null);
   const textField1Ref = useRef<HTMLDivElement>(null);
   const textField2Ref = useRef<HTMLDivElement>(null);
 
-  const handleJsonParse = (jsonString: string, setJson: (json: any | null) => void): boolean => {
+  console.log("JsonInput rendered with json1Input:", json1Input, "json2Input:", json2Input, "diffingId:", diffingId, "noResults:", noResults, "invalidInput:", invalidInput);
+
+  const handleJsonParse = (jsonString: string, setJson: (json: any | null) => void, inputType: string): boolean => {
     try {
       const cleanedJson = jsonString.trim();
       const parsed = JSON.parse(cleanedJson);
+      console.log(`Parsed ${inputType} successfully:`, parsed);
       setJson(parsed);
+      setInvalidInput(false); // Reset invalid input if parsing succeeds
       return true;
     } catch (e: any) {
-      alert(`Invalid JSON format: ${e.message}. Please check your input.`);
+      console.log(`Failed to parse ${inputType}:`, e.message);
       setJson(null);
+      setInvalidInput(true); // Set invalid input state
       return false;
     }
   };
 
+  const setJsonInputLocal = (json1Str: string, json2Str: string) => {
+    console.log("setJsonInputLocal called with json1Str:", json1Str, "json2Str:", json2Str);
+    console.log("Current json1Input before update:", json1Input, "json2Input:", json2Input);
+    setJson1Input(prev => {
+      const newValue = json1Str;
+      console.log("Setting json1Input to:", newValue);
+      return newValue;
+    });
+    setJson2Input(prev => {
+      const newValue = json2Str;
+      console.log("Setting json2Input to:", newValue);
+      return newValue;
+    });
+    handleJsonParse(json1Str, setJson1, "json1");
+    handleJsonParse(json2Str, setJson2, "json2");
+    console.log("After update attempt, json1Input:", json1Input, "json2Input:", json2Input);
+  };
+
+  useImperativeHandle(ref, () => ({
+    setJsonInput: setJsonInputLocal,
+  }), [setJsonInputLocal]);
+
   const handleCompareClick = () => {
     console.log("Compare button clicked");
-    const json1Valid = handleJsonParse(json1Input, setJson1);
-    const json2Valid = handleJsonParse(json2Input, setJson2);
+    setInvalidInput(false); // Reset invalid input state
+    setNoResults(false); // Reset no results state
+    const json1Valid = handleJsonParse(json1Input, setJson1, "json1");
+    const json2Valid = handleJsonParse(json2Input, setJson2, "json2");
     if (json1Valid && json2Valid) {
-      console.log("Both JSON inputs are valid");
-      if (onCompare) onCompare(); // Call the onCompare callback when compare is successful
+      console.log("Both JSON inputs are valid, json1:", json1, "json2:", json2);
+      if (json1 === null && json2 === null) {
+        console.log("No valid results found, clearing input boxes");
+        setJson1Input(""); // Clear the json1 input box
+        setJson2Input(""); // Clear the json2 input box
+        setNoResults(true); // Set no results state for Compare
+      }
+      if (onCompare) onCompare();
     }
   };
 
-  const handleFindResultsAndDiffClick = () => {
-    console.log("Compare button clicked");
-    // TODO: Query TSLogDB
+  const handleFindResultsAndDiffClick = async () => {
+    console.log("Find Results and Diff button clicked");
+    setInvalidInput(false); // Reset invalid input state
+    setNoResults(false); // Reset no results state
+
+    // Convert pxnum to number (assuming it's a string from the TextField, default to 0 if empty or invalid)
+    const pxnumNumber = parseInt(pxnum || "0", 10) || 0;
+
+    try {
+      // Call fetchDiffData with diffingId, pxnum, environment, and serviceToDiff
+      const diffData = await fetchDiffData(diffingId || "", pxnumNumber, environment, serviceToDiff || "");
+      console.log("fetchDiffData response:", diffData);
+
+      if (diffData && diffData.sunJson && diffData.linuxJson) {
+        setJson1(diffData.sunJson);
+        setJson2(diffData.linuxJson);
+        setJson1Input(JSON.stringify(diffData.sunJson, null, 2)); // Use setState to update json1Input
+        setJson2Input(JSON.stringify(diffData.linuxJson, null, 2)); // Use setState to update json2Input
+        console.log("SUN INPUT", JSON.stringify(diffData.sunJson, null, 2));
+        setNoResults(false); // Clear no results state if data is found
+      } else {
+        console.log("No diff data found, clearing input boxes");
+        setJson1(null);
+        setJson2(null);
+        setJson1Input(""); // Clear the json1 input box
+        setJson2Input(""); // Clear the json2 input box
+        setNoResults(true); // Set no results state
+      }
+    } catch (error) {
+      console.error("Error fetching diff data:", error);
+      setJson1(null);
+      setJson2(null);
+      setJson1Input(""); // Clear the json1 input box
+      setJson2Input(""); // Clear the json2 input box
+      setNoResults(true); // Set no results state for error case
+    }
+
+    // No need to parse again here since fetchDiffData already provides the data
+    // const json1Valid = handleJsonParse(json1Input, setJson1, "json1");
+    // const json2Valid = handleJsonParse(json2Input, setJson2, "json2");
+
+    // if (!json1Valid || !json2Valid) {
+    //   console.log("Invalid JSON input detected, clearing input boxes");
+    //   setJson1Input(""); // Clear the json1 input box
+    //   setJson2Input(""); // Clear the json2 input box
+    //   return; // Exit early if input is invalid
+    // }
+
+    console.log("Both JSON inputs are valid, json1:", json1, "json2:", json2, "diffingId:", diffingId, "pxnum:", pxnum, "environment:", environment, "serviceToDiff:", serviceToDiff);
   };
 
   const handleDiffingIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,7 +192,7 @@ const JsonInput: React.FC<JsonInputProps> = ({
   };
 
   const getServicesToDiff = () => {
-    const services = ["TKTAPIAccessor", "CUTSService", "cmmtsvc", "tssvcapi"];
+    const services = fetchServicesToDiff();
     return services.map((service) => (
       <MenuItem key={service} value={service}>
         {service}
@@ -106,9 +202,9 @@ const JsonInput: React.FC<JsonInputProps> = ({
 
   return (
     <div style={{ width: "100%", maxWidth: "1280px", padding: "16px" }}>
-      {/* New Inputs for Diffing ID, pxnum, Environment, and Tolerance */}
       <div style={{ display: "flex", flexDirection: "row", gap: "24px", marginBottom: "24px" }}>
         <TextField
+          // Removed key prop to prevent re-mounting and duplicate fields
           label="Diffing ID"
           value={diffingId}
           onChange={handleDiffingIdChange}
@@ -118,13 +214,14 @@ const JsonInput: React.FC<JsonInputProps> = ({
           sx={{ flex: 1, maxWidth: "300px", backgroundColor: "#2e2c2c" }}
         />
         <TextField
+          // Removed key prop to prevent re-mounting and duplicate fields
           label="pxnum"
           value={pxnum}
           onChange={handlePxnumChange}
           variant="outlined"
           InputProps={{ style: { color: "orange" } }}
           InputLabelProps={{ style: { color: "white" } }}
-          sx={{ flex: 1, maxWidth: "300px", backgroundColor: "#2e2c2c" }}
+          sx={{ flex: "1", maxWidth: "300px", backgroundColor: "#2e2c2c" }}
         />
         <Tooltip title="Environment to diff on" arrow>
           <FormControl sx={{ flex: 1, maxWidth: "200px" }} variant="outlined">
@@ -136,15 +233,15 @@ const JsonInput: React.FC<JsonInputProps> = ({
               sx={{ color: "orange", backgroundColor: "#2e2c2c", "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" } }}
               MenuProps={{ PaperProps: { style: { backgroundColor: "#2e2c2c", color: "white" } } }}
             >
-              <MenuItem value="DEV">DEV</MenuItem>
-              <MenuItem value="BETA">BETA</MenuItem>
-              <MenuItem value="UAT">UAT</MenuItem>
-              <MenuItem value="PROD">PROD</MenuItem>
+              {fetchEnvironmentsToDiff().map((env) => (
+                <MenuItem key={env} value={env} style={{ color: "white" }}>{env}</MenuItem>
+              ))}
             </Select>
           </FormControl>
         </Tooltip>
         <Tooltip title="Enter tolerance value for floating point values" arrow>
           <TextField
+            // Removed key prop to prevent re-mounting and duplicate fields
             label="Tolerance"
             value={tolerance}
             onChange={handleToleranceChange}
@@ -188,21 +285,51 @@ const JsonInput: React.FC<JsonInputProps> = ({
         </Tooltip>
       </div>
 
-      {/* Centered Button */}
-      <div style={{ display: "flex", justifyContent: "center", marginTop: "16px" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
         <Button
           onClick={handleFindResultsAndDiffClick}
           variant="contained"
-          style={{ backgroundColor: "#FFA500" }}
-          startIcon={<FindInPage />}
+          style={{ backgroundColor: "#3b82f6" }}
+          startIcon={<Compare />}
         >
-          Find Results and Diff 
+          Find Results and Diff 👩🏻‍🍳
         </Button>
+        {invalidInput && (
+          <Typography
+            variant="body1"
+            sx={{
+              color: "#ff4444", // Red color for visibility
+              fontWeight: "bold",
+              backgroundColor: "rgba(255, 68, 68, 0.1)", // Light red background
+              padding: "8px 16px",
+              borderRadius: "4px",
+              border: "1px solid #ff4444",
+              marginTop: "8px",
+            }}
+          >
+            Invalid JSON input. Please check your input and try again.
+          </Typography>
+        )}
+        {noResults && (
+          <Typography
+            variant="body1"
+            sx={{
+              color: "#ff4444", // Red color for visibility
+              fontWeight: "bold",
+              backgroundColor: "rgba(255, 68, 68, 0.1)", // Light red background
+              padding: "8px 16px",
+              borderRadius: "4px",
+              border: "1px solid #ff4444",
+              marginTop: "8px",
+            }}
+          >
+            No results found
+          </Typography>
+        )}
       </div>
 
       <br />
 
-      {/* Existing Text Fields */}
       <div
         ref={containerRef}
         style={{
@@ -219,13 +346,17 @@ const JsonInput: React.FC<JsonInputProps> = ({
           style={{ flex: 1, minWidth: "400px", maxWidth: "600px" }}
         >
           <TextField
+            // Removed key prop to prevent re-mounting and duplicate fields
             className="w-full"
             sx={{ height: "100%", width: "100%", backgroundColor: "#2e2c2c" }}
             multiline
             rows={20}
             label="Response OUT (SUN)"
             value={json1Input}
-            onChange={(e) => setJson1Input(e.target.value)}
+            onChange={(e) => {
+              setJson1Input(e.target.value);
+              handleJsonParse(e.target.value, setJson1, "json1");
+            }}
             variant="outlined"
             InputProps={{ style: { color: "white", height: "100%" }, spellCheck: "false" }}
             InputLabelProps={{ style: { color: "white" } }}
@@ -236,13 +367,17 @@ const JsonInput: React.FC<JsonInputProps> = ({
           style={{ flex: 1, minWidth: "400px", maxWidth: "600px" }}
         >
           <TextField
+            // Removed key prop to prevent re-mounting and duplicate fields
             className="w-full"
             sx={{ height: "100%", width: "100%", backgroundColor: "#2e2c2c" }}
             multiline
             rows={20}
             label="Response OUT (LINUX)"
             value={json2Input}
-            onChange={(e) => setJson2Input(e.target.value)}
+            onChange={(e) => {
+              setJson2Input(e.target.value);
+              handleJsonParse(e.target.value, setJson2, "json2");
+            }}
             variant="outlined"
             InputProps={{ style: { color: "white", height: "100%" }, spellCheck: "false" }}
             InputLabelProps={{ style: { color: "white" } }}
@@ -250,19 +385,50 @@ const JsonInput: React.FC<JsonInputProps> = ({
         </div>
       </div>
 
-      {/* Centered Button */}
-      <div style={{ display: "flex", justifyContent: "center", marginTop: "16px" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
         <Button
           onClick={handleCompareClick}
           variant="contained"
-          style={{ backgroundColor: "#FFA500" }}
+          style={{ backgroundColor: "#3b82f6" }}
           startIcon={<Compare />}
         >
           Compare
         </Button>
+        {invalidInput && (
+          <Typography
+            variant="body1"
+            sx={{
+              color: "#ff4444", // Red color for visibility
+              fontWeight: "bold",
+              backgroundColor: "rgba(255, 68, 68, 0.1)", // Light red background
+              padding: "8px 16px",
+              borderRadius: "4px",
+              border: "1px solid #ff4444",
+              marginTop: "8px",
+            }}
+          >
+            Invalid JSON input. Please check your input and try again.
+          </Typography>
+        )}
+        {noResults && (
+          <Typography
+            variant="body1"
+            sx={{
+              color: "#ff4444", // Red color for visibility
+              fontWeight: "bold",
+              backgroundColor: "rgba(255, 68, 68, 0.1)", // Light red background
+              padding: "8px 16px",
+              borderRadius: "4px",
+              border: "1px solid #ff4444",
+              marginTop: "8px",
+            }}
+          >
+            No results found
+          </Typography>
+        )}
       </div>
     </div>
   );
-};
+});
 
 export default JsonInput;
