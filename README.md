@@ -62,11 +62,11 @@ Clicking `VIEW DIFF` will take you back to the first page and load the diff in f
 
 Clicking `HUMIO LINK` will open up a humio link on a seperate tab with information relating to the request that caused the diff+
 
-![Diff Selection Page 1](img/diffSelectionpage1.png "Diff Selection Page 1")
+![Diff Selection Page 1](img/diffSelectionPage1.png "Diff Selection Page 1")
 
-![Diff Selection Page 2](img/diffSelectionpage2.png "Diff Selection Page 2")
+![Diff Selection Page 2](img/diffSelectionPage2.png "Diff Selection Page 2")
 
-![Diff Selection Page 3](img/diffSelectionpage3.png "Diff Selection Page 3")
+![Diff Selection Page 3](img/diffSelectionPage3.png "Diff Selection Page 3")
 
 ## Running Locally
 
