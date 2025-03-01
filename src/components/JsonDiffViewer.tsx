@@ -33,9 +33,10 @@ interface JsonDiffViewerProps {
   tolerance?: number;
   shouldExpand?: boolean;
   setShouldExpand?: (value: boolean) => void;
+  diffId?: string; // New prop for specific diff ID
 }
 
-const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance = 0.0001, shouldExpand = false, setShouldExpand }) => {
+const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance = 0.0001, shouldExpand = false, setShouldExpand, diffId }) => {
   const [diffTree, setDiffTree] = useState<any[] | null>(null);
   const [diffTable, setDiffTable] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -65,8 +66,8 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
   const colorOptions = ["red", "orange", "yellow", "green", "blue", "purple", "gray", "white"];
 
   // Memoize json1 and json2 to stabilize their references in useEffect
-  const memoJson1 = useMemo(() => JSON.parse(JSON.stringify(json1)), [json1]);
-  const memoJson2 = useMemo(() => JSON.parse(JSON.stringify(json2)), [json2]);
+  const memoJson1 = useMemo(() => JSON.parse(JSON.stringify(json1)), [json1, diffId]); // Recompute when diffId changes
+  const memoJson2 = useMemo(() => JSON.parse(JSON.stringify(json2)), [json2, diffId]); // Recompute when diffId changes
 
   useEffect(() => {
     console.log("shouldExpand changed to:", shouldExpand);
@@ -176,7 +177,7 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
       setDiffTree(treeDiff.length > 0 ? treeDiff : [{ id: "no-diff-0", label: "No differences found", color: "gray", path: [], diffType: null }]);
       setDiffTable(tableDiff.length > 0 ? tableDiff : [{ key: "No differences", sun: "", linux: "", color: "gray", diffType: null }]);
     }
-  }, [memoJson1, memoJson2, mismatchColor, missingSunColor, missingLinuxColor, tolerance]);
+  }, [memoJson1, memoJson2, mismatchColor, missingSunColor, missingLinuxColor, tolerance, diffId]);
 
   useEffect(() => {
     if (!diffTree || !diffTable) return;
@@ -197,6 +198,11 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
           // Only show Missing LINUX (red) if that's the only type checked
           if (diffTypes.missingLinux && !diffTypes.mismatches && !diffTypes.missingSun) {
             if (node.diffType !== "missingLinux") return null;
+          }
+
+          // Only show Missing SUN (orange) if that's the only type checked
+          if (diffTypes.missingSun && !diffTypes.mismatches && !diffTypes.missingLinux) {
+            if (node.diffType !== "missingSun") return null;
           }
 
           // Apply search filtering if there's a query
@@ -222,6 +228,11 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
         filteredByDiffType = filteredByDiffType.filter((item) => item.diffType === "missingLinux");
       }
 
+      // Only show Missing SUN (orange) if that's the only type checked
+      if (diffTypes.missingSun && !diffTypes.mismatches && !diffTypes.missingLinux) {
+        filteredByDiffType = filteredByDiffType.filter((item) => item.diffType === "missingSun");
+      }
+
       // Apply search filtering if there's a query
       if (searchQuery) {
         return filteredByDiffType.filter((item) => {
@@ -234,8 +245,8 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
       return filteredByDiffType;
     };
 
-     let filteredTreeData = searchQuery ? filterTree(diffTree) : diffTree.filter((node) => !allDiffTypesUnchecked && (!node.diffType || diffTypes[node.diffType as keyof typeof diffTypes]));
-     let filteredTableData = searchQuery ? filterTable(diffTable) : diffTable.filter((item) => !allDiffTypesUnchecked && (!item.diffType || diffTypes[item.diffType as keyof typeof diffTypes]));
+    let filteredTreeData = searchQuery ? filterTree(diffTree) : diffTree.filter((node) => !allDiffTypesUnchecked && (!node.diffType || diffTypes[node.diffType as keyof typeof diffTypes]));
+    let filteredTableData = searchQuery ? filterTable(diffTable) : diffTable.filter((item) => !allDiffTypesUnchecked && (!item.diffType || diffTypes[item.diffType as keyof typeof diffTypes]));
 
     // Special case: If only Missing LINUX is checked, filter to show only red entries
     if (diffTypes.missingLinux && !diffTypes.mismatches && !diffTypes.missingSun) {
@@ -256,7 +267,7 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
       const allIds = extractAllIds(filteredTreeData);
       setExpandedItems(allIds);
     }
-  }, [searchQuery, diffTree, diffTable, searchFields, diffTypes]); // Ensure diffTypes triggers re-filtering
+  }, [searchQuery, diffTree, diffTable, searchFields, diffTypes, diffId]);
 
   // Helper function to extract all node IDs for expansion
   const extractAllIds = (nodes: any[]): string[] => {

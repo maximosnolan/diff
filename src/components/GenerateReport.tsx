@@ -14,9 +14,6 @@ import {
   FormControlLabel,
   FormGroup,
 } from "@mui/material";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFnsV3";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 
 interface GenerateReportProps {
   json1?: any | null;
@@ -27,8 +24,8 @@ interface GenerateReportProps {
 const GenerateReport: React.FC<GenerateReportProps> = ({ json1, json2, tolerance }) => {
   const [environment, setEnvironment] = useState<string>("DEV");
   const [serviceName, setServiceName] = useState<string>("TKTAPIAccessor");
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
   const [emails, setEmails] = useState<string>("");
   const [markDiffed, setMarkDiffed] = useState<boolean>(false);
   const [sendEmail, setSendEmail] = useState<boolean>(false);
@@ -135,68 +132,42 @@ const GenerateReport: React.FC<GenerateReportProps> = ({ json1, json2, tolerance
           </FormControl>
         </Tooltip>
 
-        {/* Date Pickers */}
-        <LocalizationProvider dateAdapter={AdapterDateFns}>
-          <Box sx={{ display: "flex", gap: 2, alignItems: "center", boarder: "white"}}>
-            <DatePicker
-              label="Start Date"
-              value={startDate}
-              sx={{
-                backgroundColor: "#2e2c2c",
-                maxWidth: "200px",
-                "& .MuiInputBase-root": {
-                  backgroundColor: "#2e2c2c",
-                },
-                "& .MuiInputBase-input": {
-                  color: "white !important", // Ensure date text is white
-                  backgroundColor: "#2e2c2c",
-                },
-                "& .MuiOutlinedInput-notchedOutline": {
-                  borderColor: "white",
-                },
-                "& .MuiInputLabel-root": { 
-                  color: "white !important", // Label color (including when shrunk)
-                },
-              }}
-              onChange={(newValue) => setStartDate(newValue)}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  variant="outlined"
-                />
-              )}
-            />
-            <Typography>to</Typography>
-            <DatePicker
-              label="End Date"
-              value={endDate}
-              onChange={(newValue) => setEndDate(newValue)}
-              sx={{
-                backgroundColor: "#2e2c2c",
-                maxWidth: "200px",
-                "& .MuiInputBase-root": {
-                  backgroundColor: "#2e2c2c",
-                },
-                "& .MuiInputBase-input": {
-                  color: "white !important", // Ensure date text is white
-                  backgroundColor: "#2e2c2c",
-                },
-                "& .MuiOutlinedInput-notchedOutline": {
-                  borderColor: "white",
-                },
-                "& .MuiInputLabel-root": { 
-                  color: "white !important", // Label color (including when shrunk)
-                },
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  variant="outlined"
-                />
-              )}
-            />
-          </Box>
-        </LocalizationProvider>
+        {/* Date Inputs */}
+        <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+          <TextField
+            label="Start Date (YYYY-MM-DD)"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            variant="outlined"
+            placeholder="YYYY-MM-DD"
+            sx={{ 
+              backgroundColor: "#2e2c2c", 
+              maxWidth: "200px",
+              "& .MuiInputBase-input": { color: "white" },
+              "& .MuiInputLabel-root": { color: "white" },
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" },
+            }}
+            InputProps={{ style: { color: "white" } }}
+            InputLabelProps={{ style: { color: "white" } }}
+          />
+          <Typography style={{ color: "white" }}>to</Typography>
+          <TextField
+            label="End Date (YYYY-MM-DD)"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            variant="outlined"
+            placeholder="YYYY-MM-DD"
+            sx={{ 
+              backgroundColor: "#2e2c2c", 
+              maxWidth: "200px",
+              "& .MuiInputBase-input": { color: "white" },
+              "& .MuiInputLabel-root": { color: "white" },
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" },
+            }}
+            InputProps={{ style: { color: "white" } }}
+            InputLabelProps={{ style: { color: "white" } }}
+          />
+        </Box>
 
         {/* Checkboxes */}
         <FormGroup>
