@@ -14,7 +14,7 @@ This extension of the diffing tool will address all of those points by providing
 
 ## Functionality
 
-Currently, all data is mocked and hard coded (as this is a POC).
+**IMPORTANT** Currently, all data is mocked and hard coded (as this is a POC). You can find the hard coded data under `/src/services/dataServices.ts`
 
 The first page on the website allows for you to enter in a query where you can customize the following:
 1. Diff ID 
@@ -68,12 +68,18 @@ Clicking `HUMIO LINK` will open up a humio link on a seperate tab with informati
 
 ![Diff Selection Page 3](img/diffSelectionPage3.png "Diff Selection Page 3")
 
+## Next steps
+
+1. Agree on front end functionality with various TOMS teams
+2. `migrate diffing infrastructure` to a BAS service to allow for `on demand diffing`
+3. Deploy website on `BPAAS` 
+
 ## Running Locally
 
 To run this project locally, follow these steps:
 
 ### Prerequisites
-Ensure you have the following installed:
+Ensure you have the following installed (should be installed with bootstrapper):
 
 1. **Node.js** (version 16 or higher)  
    Install from [here](https://nodejs.org/).
@@ -90,8 +96,8 @@ Ensure you have the following installed:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://your-repository-url.git
-   cd your-repository-folder
+   git clone git@github.com:maximosnolan/diff.git
+   json-diff-viewer
    ```
 
 2. **Install dependencies:**
@@ -108,7 +114,7 @@ Ensure you have the following installed:
    ```bash
    npm start
    ```
-   This will launch the project in your default browser at `http://localhost:3000`.
+   This will launch the project in your default browser at `http://localhost:5173/`.
 
 ### Optional Steps
 
@@ -132,3 +138,5 @@ Ensure you have the following installed:
 
 - **Issues with Tailwind CSS not being applied:**  
    Check that the Tailwind configuration (`tailwind.config.js`) is set up properly, and that your CSS files are correctly importing Tailwind's base styles (usually in `index.css` or `App.css`).
+
+If nothing else works, please reach out to `Maximos Nolan` 
