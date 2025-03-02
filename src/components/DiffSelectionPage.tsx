@@ -34,7 +34,6 @@ interface DiffSelectionPageProps {
   ) => void;
 }
 
-// Assume this function exists in your dataService
 declare function fetchHumioLink(environment: string, diffId: string, serviceName: string): Promise<string>;
 
 const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId }) => {
@@ -44,56 +43,88 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
   const [endDate, setEndDate] = useState("2023-12-31");
   const [diffGroups, setDiffGroups] = useState<Record<string, { diffId: string; json1: any; json2: any }[]>>({});
   const [filterFields, setFilterFields] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedDiffIds, setSelectedDiffIds] = useState<Record<string, string>>({}); // New state for tracking selections
 
   const services = fetchServicesToDiff();
   const environments = fetchEnvironmentsToDiff();
 
   useEffect(() => {
     const cachedDiffGroups = localStorage.getItem("diffGroups");
-    console.log("useEffect triggered, cachedDiffGroups:", cachedDiffGroups);
     if (cachedDiffGroups) {
       const parsedGroups = JSON.parse(cachedDiffGroups);
-      console.log("Parsed diffGroups:", parsedGroups);
       setDiffGroups(parsedGroups);
       const uniqueDiffFields = [...new Set(
         Object.values(parsedGroups)
-          .flatMap((group: { diffId: string; json1: any; json2: any }[]) => 
+          .flatMap((group) => 
             group.flatMap(diff => getDifferentFields(diff.json1, diff.json2))
           )
       )];
-      console.log("Unique diff fields from cached data:", uniqueDiffFields);
-      setFilterFields(uniqueDiffFields); // Default to all fields checked
-      console.log("Initial filterFields set to:", uniqueDiffFields);
+      setFilterFields(uniqueDiffFields);
+      // Initialize selectedDiffIds with first diffId from each group
+      const initialSelections = Object.fromEntries(
+        Object.entries(parsedGroups).map(([groupKey, diffs]) => [groupKey, diffs[0]?.diffId || ""])
+      );
+      setSelectedDiffIds(initialSelections);
     }
   }, []);
 
-  const handleCompareClick = () => {
+  const handleCompareClick = async () => {
     if (service && environment && startDate && endDate) {
-      console.log("handleCompareClick triggered with service:", service, "environment:", environment, "startDate:", startDate, "endDate:", endDate);
-      const mockDiffs = fetchDiffGroups(service, environment, startDate, endDate);
-      console.log("Fetched diff groups:", mockDiffs);
-      setDiffGroups(mockDiffs);
-      const uniqueDiffFields = [
-        ...new Set(
-          Object.values(mockDiffs)
-            .flatMap(group => group.flatMap(diff => getDifferentFields(diff.json1, diff.json2)))
-        ),
-      ];
-      console.log("Unique diff fields after compare:", uniqueDiffFields);
-      setFilterFields(uniqueDiffFields); // Default to all fields checked after compare
-      console.log("Filter fields after compare set to:", uniqueDiffFields);
-      localStorage.setItem("diffGroups", JSON.stringify(mockDiffs));
+      setLoading(true);
+      try {
+        const groups = await fetchDiffGroups(service, environment, startDate, endDate);
+        setDiffGroups(groups);
+        const uniqueDiffFields = [
+          ...new Set(
+            Object.values(groups)
+              .flatMap(group => group.flatMap(diff => getDifferentFields(diff.json1, diff.json2)))
+          ),
+        ];
+        setFilterFields(uniqueDiffFields);
+        // Initialize selections for new groups
+        const initialSelections = Object.fromEntries(
+          Object.entries(groups).map(([groupKey, diffs]) => [groupKey, diffs[0]?.diffId || ""])
+        );
+        setSelectedDiffIds(initialSelections);
+        localStorage.setItem("diffGroups", JSON.stringify(groups));
+      } catch (error) {
+        console.error("Error fetching diff groups:", error);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   const getDifferentFields = (json1: any, json2: any): string[] => {
     const diffs = [];
-    for (const key in json1) {
-      if (json1[key] !== json2[key] && typeof json1[key] !== "object") {
+    const keys1 = Object.keys(json1);
+    const keys2 = Object.keys(json2);
+
+    for (const key of keys1) {
+      if (!(key in json2)) {
         diffs.push(key);
-      } else if (typeof json1[key] === "object" && json1[key] !== null && json2[key] !== null) {
+      } else if (typeof json1[key] !== "object" || json1[key] === null) {
+        if (typeof json1[key] === "number" && typeof json2[key] === "number") {
+          if (Math.abs(json1[key] - json2[key]) > 0.0001) {
+            diffs.push(key);
+          }
+        } else if (json1[key] !== json2[key]) {
+          diffs.push(key);
+        }
+      } else if (typeof json2[key] === "object" && json2[key] !== null) {
         const nestedDiffs = getDifferentFields(json1[key], json2[key]);
-        diffs.push(...nestedDiffs.map(d => `${key}.${d}`));
+        if (nestedDiffs.length > 0) {
+          diffs.push(...nestedDiffs.map(d => `${key}.${d}`));
+        }
+      } else {
+        diffs.push(key);
+      }
+    }
+
+    for (const key of keys2) {
+      if (!(key in json1)) {
+        diffs.push(key);
       }
     }
     return diffs;
@@ -101,39 +132,25 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
 
   const handleDiffIdChange = (groupKey: string, event: any) => {
     const selectedDiffId = event.target.value;
-    console.log("handleDiffIdChange triggered for groupKey:", groupKey, "with selectedDiffId:", selectedDiffId);
-    const selectedDiff = diffGroups[groupKey].find((diff) => diff.diffId === selectedDiffId);
-    if (selectedDiff) {
-      onSelectDiffId(
-        selectedDiff.diffId,
-        selectedDiff.json1,
-        selectedDiff.json2,
-        false,
-        (json1Str: string, json2Str: string) => {
-          console.log("handleDiffIdChange callback received with:", json1Str, json2Str);
-        },
-        environment,
-        service,
-        "999"
-      );
-    }
+    setSelectedDiffIds(prev => ({
+      ...prev,
+      [groupKey]: selectedDiffId
+    }));
+    // Removed automatic onSelectDiffId call - now only triggers on View Diff click
   };
 
-  const handleViewDiffClick = (groupKey: string, selectedDiffId: string) => {
-    console.log("handleViewDiffClick triggered for groupKey:", groupKey, "with selectedDiffId:", selectedDiffId);
+  const handleViewDiffClick = (groupKey: string) => {
+    const selectedDiffId = selectedDiffIds[groupKey];
     const selectedDiff = diffGroups[groupKey].find((diff) => diff.diffId === selectedDiffId);
     if (selectedDiff) {
       const json1Str = JSON.stringify(selectedDiff.json1, null, 2);
       const json2Str = JSON.stringify(selectedDiff.json2, null, 2);
-      console.log("handleViewDiffClick JSON strings:", { json1Str, json2Str });
       onSelectDiffId(
         selectedDiff.diffId,
         selectedDiff.json1,
         selectedDiff.json2,
         true,
-        (json1Str, json2Str) => {
-          console.log("handleViewDiffClick callback executed with:", json1Str, json2Str);
-        },
+        (json1Str, json2Str) => {},
         environment,
         service,
         "999"
@@ -141,11 +158,10 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
     }
   };
 
-  const handleHumioLinkClick = async (selectedDiffId: string) => {
-    console.log("handleHumioLinkClick triggered with selectedDiffId:", selectedDiffId, "environment:", environment, "service:", service);
+  const handleHumioLinkClick = async (groupKey: string) => {
+    const selectedDiffId = selectedDiffIds[groupKey];
     try {
       const humioUrl = await fetchHumioLink(environment, selectedDiffId, service);
-      console.log("Humio URL fetched:", humioUrl);
       window.open(humioUrl, '_blank');
     } catch (error) {
       console.error("Error fetching Humio link:", error);
@@ -154,30 +170,33 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
   };
 
   const handleFilterChange = (event: any) => {
-    const { target: { value } } = event;
-    const newFilterFields = typeof value === "string" ? value.split(",") : value;
-    console.log("handleFilterChange triggered with new value:", newFilterFields, "previous filterFields:", filterFields);
+    const newFilterFields = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value;
     setFilterFields(newFilterFields);
   };
 
   const allDiffFields = [
     ...new Set(
-      Object.values(diffGroups)
+      Object.values(diffGroups || {})
         .flatMap(group => group.flatMap(diff => getDifferentFields(diff.json1, diff.json2)))
     ),
   ];
-  console.log("allDiffFields calculated:", allDiffFields);
 
-  const filteredDiffGroups = filterFields.length > 0
+  // Updated filtering logic - show groups where ANY selected filter field is present
+  const filteredDiffGroups = filterFields.length > 0 && diffGroups
     ? Object.fromEntries(
         Object.entries(diffGroups).filter(([groupKey]) =>
-          filterFields.some(field => groupKey.includes(field))
+          filterFields.some(field => 
+            getDifferentFields(
+              diffGroups[groupKey][0].json1,
+              diffGroups[groupKey][0].json2
+            ).includes(field)
+          )
         )
       )
-    : {};
-  console.log("filteredDiffGroups calculated:", filteredDiffGroups, "with filterFields:", filterFields);
+    : diffGroups || {};
 
-  const renderStackedFields = (groupKey: string) => {
+  const renderStackedFields = (groupKey: string | undefined) => {
+    if (!groupKey) return null;
     return groupKey.split(",").map((field, index) => (
       <Typography key={index} sx={{ color: "white", display: "block", padding: "2px 0" }}>{field}</Typography>
     ));
@@ -261,17 +280,18 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
               <Button
                 variant="contained"
                 onClick={handleCompareClick}
+                disabled={loading}
                 sx={{ backgroundColor: "#3b82f6", maxWidth: "200px", padding: "10px 20px", fontSize: "16px" }}
               >
-                Compare
+                {loading ? "Loading..." : "Compare"}
               </Button>
-              {Object.keys(diffGroups).length === 0 && (
+              {Object.keys(diffGroups).length === 0 && !loading && (
                 <Typography
                   variant="body1"
                   sx={{
-                    color: "#ff4444", // Red color for visibility
+                    color: "#ff4444",
                     fontWeight: "bold",
-                    backgroundColor: "rgba(255, 68, 68, 0.1)", // Light red background
+                    backgroundColor: "rgba(255, 68, 68, 0.1)",
                     padding: "8px 16px",
                     borderRadius: "4px",
                     border: "1px solid #ff4444",
@@ -292,6 +312,7 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
                 label="Filter by Fields"
                 sx={{ color: "orange", backgroundColor: "#4f4c43", "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" } }}
                 MenuProps={{ PaperProps: { style: { backgroundColor: "#2e2c2c", color: "white" } } }}
+                disabled={loading || Object.keys(diffGroups).length === 0}
               >
                 {allDiffFields.map((field) => (
                   <MenuItem key={field} value={field}>
@@ -311,9 +332,8 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {Object.entries(filteredDiffGroups).map(([groupKey, diffs]) => {
-                    const selectedDiffId = diffs[0]?.diffId || "";
-                    console.log("Rendering row for groupKey:", groupKey, "with filteredDiffGroups:", filteredDiffGroups);
+                  {Object.entries(filteredDiffGroups || {}).map(([groupKey, diffs]) => {
+                    const selectedDiffId = selectedDiffIds[groupKey] || diffs[0]?.diffId || "";
                     return (
                       <TableRow key={groupKey} sx={{ "&:nth-of-type(odd)": { backgroundColor: "#2e2c2c" } }}>
                         <TableCell sx={{ color: "white", padding: "12px" }}>
@@ -328,6 +348,7 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
                               label="Select Diff ID"
                               sx={{ color: "orange", backgroundColor: "#4f4c43", "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" } }}
                               MenuProps={{ PaperProps: { style: { backgroundColor: "#2e2c2c", color: "white" } } }}
+                              disabled={loading}
                             >
                               {diffs.map((diff) => (
                                 <MenuItem key={diff.diffId} value={diff.diffId} style={{ color: "white" }}>
@@ -341,14 +362,16 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
                           <Box sx={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                             <Button
                               variant="contained"
-                              onClick={() => handleViewDiffClick(groupKey, selectedDiffId)}
+                              onClick={() => handleViewDiffClick(groupKey)}
+                              disabled={loading}
                               sx={{ backgroundColor: "#3b82f6", padding: "8px 16px" }}
                             >
                               View Diff
                             </Button>
                             <Button
                               variant="outlined"
-                              onClick={() => handleHumioLinkClick(selectedDiffId)}
+                              onClick={() => handleHumioLinkClick(groupKey)}
+                              disabled={loading}
                               sx={{ 
                                 color: "white", 
                                 borderColor: "#3b82f6", 
@@ -366,6 +389,19 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
                 </TableBody>
               </Table>
             </TableContainer>
+            {loading && (
+              <Typography
+                variant="body1"
+                sx={{
+                  color: "#ffffff",
+                  fontWeight: "bold",
+                  textAlign: "center",
+                  marginTop: "16px",
+                }}
+              >
+                Loading diffs...
+              </Typography>
+            )}
           </Box>
         </CardContent>
       </Card>
