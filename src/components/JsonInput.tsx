@@ -40,9 +40,9 @@ const JsonInput = forwardRef(({
   environmentIn,
   serviceIn,
 }: JsonInputProps, ref) => {
-  const [json1Input, setJson1Input] = useState(json1 ? JSON.stringify(json1, null, 2) : "{\n  \"id\": 1,\n  \"name\": \"Alice\",\n  \"age\": 25,\n  \"double\": 1.123456789,\n  \"double2\": 1.123456789,\n  \"address\": {\n    \"city\": \"New York\",\n    \"zip\": \"10001\"\n  }\n}");
-  const [json2Input, setJson2Input] = useState(json2 ? JSON.stringify(json2, null, 2) : "{\n  \"id\": 1,\n  \"name\": \"Alice B.\",\n  \"age\": 26,\n  \"double\": 1.1,\n  \"double2\": 1.1234,\n  \"address\": {\n    \"city\": \"San Francisco\",\n    \"zip\": \"94105\"\n  }\n}");
-  const [diffingId, setDiffingIdLocal] = useState(diffId ? diffId : "1234-5478-9XXX");
+  const [json1Input, setJson1Input] = useState(json1 ? JSON.stringify(json1, null, 2) :"{\n  \"id\": 1,\n  \"traderName\": \"John Doe\",\n  \"price\": 99.75,\n  \"location\": \"New York\",\n  \"counterpartyName\": \"ABC Corp\",\n  \"commission\": 4.5,\n  \"address\": {\n    \"city\": \"New York\",\n    \"zip\": \"10001\"\n  }\n}");
+  const [json2Input, setJson2Input] = useState(json2 ? JSON.stringify(json2, null, 2) : "{\n  \"id\": 1,\n  \"traderName\": \"John Doe\",\n  \"price\": 100.50,\n  \"location\": \"New York\",\n  \"counterpartyName\": \"ABC Corp\",\n  \"commission\": 4.5,\n  \"address\": {\n    \"city\": \"San Francisco\",\n    \"zip\": \"10001\"\n  }\n}");
+  const [diffingId, setDiffingIdLocal] = useState(diffId ? diffId : "DIFF-1-TKTAPIAccessor-DEV-2023-01-01");
   const [pxnum, setPxnumLocal] = useState(pxnumIn ? pxnumIn : "999");
   const [environment, setEnvironmentLocal] = useState(environmentIn ? environmentIn : "DEV");
   const [tolerance, setToleranceLocal] = useState("0.0001");
