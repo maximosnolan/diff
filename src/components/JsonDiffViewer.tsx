@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
+// components/JsonDiffViewer.tsx
+import React, { useState, useEffect, useMemo, forwardRef, useImperativeHandle } from "react";
 import {
   Card,
   CardContent,
@@ -22,6 +23,7 @@ import {
   FormGroup,
   Tooltip,
   Typography,
+  Paper,
 } from "@mui/material";
 import { SimpleTreeView, TreeItem } from "@mui/x-tree-view";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -36,7 +38,7 @@ interface JsonDiffViewerProps {
   diffId?: string; // New prop for specific diff ID
 }
 
-const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance = 0.0001, shouldExpand = false, setShouldExpand, diffId }) => {
+const JsonDiffViewer = forwardRef(({ json1, json2, tolerance = 0.0001, shouldExpand = false, setShouldExpand, diffId }: JsonDiffViewerProps, ref) => {
   const [diffTree, setDiffTree] = useState<any[] | null>(null);
   const [diffTable, setDiffTable] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -44,7 +46,7 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
   const [filteredTable, setFilteredTable] = useState<any[]>([]);
   const [treeOpen, setTreeOpen] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
-  
+
   const [mismatchColor, setMismatchColor] = useState("yellow");
   const [missingSunColor, setMissingSunColor] = useState("orange");
   const [missingLinuxColor, setMissingLinuxColor] = useState("red");
@@ -65,13 +67,23 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
 
   const colorOptions = ["red", "orange", "yellow", "green", "blue", "purple", "gray", "white"];
 
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
   // Memoize json1 and json2 to stabilize their references in useEffect
-  const memoJson1 = useMemo(() => JSON.parse(JSON.stringify(json1)), [json1, diffId]); // Recompute when diffId changes
-  const memoJson2 = useMemo(() => JSON.parse(JSON.stringify(json2)), [json2, diffId]); // Recompute when diffId changes
+  const memoJson1 = useMemo(() => JSON.parse(JSON.stringify(json1)), [json1, diffId]);
+  const memoJson2 = useMemo(() => JSON.parse(JSON.stringify(json2)), [json2, diffId]);
+
+  useImperativeHandle(ref, () => ({
+    scrollIntoView: () => {
+      if (containerRef.current) {
+        containerRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    },
+  }));
 
   useEffect(() => {
     console.log("shouldExpand changed to:", shouldExpand);
-    if (shouldExpand && setShouldExpand) {
+    if (shouldExpand && setShouldExpand && !treeOpen && !tableOpen) {
       setTreeOpen(true);
       setTableOpen(true);
       setShouldExpand(false);
@@ -80,7 +92,7 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
         setExpandedItems(allIds);
       }
     }
-  }, [shouldExpand, setShouldExpand, filteredTree]);
+  }, [shouldExpand, setShouldExpand, filteredTree, treeOpen, tableOpen]);
 
   useEffect(() => {
     if (memoJson1 && memoJson2) {
@@ -93,20 +105,20 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
           const uniqueId = `${parentId}-${k}-${idCounter++}`;
           const currentPath = [...path, k];
           if (!(k in obj2)) {
-            result.push({ 
-              id: uniqueId, 
-              label: `${k}: ${JSON.stringify(obj1[k])} (Missing LINUX)`, 
+            result.push({
+              id: uniqueId,
+              label: `${k}: ${JSON.stringify(obj1[k])} (Missing LINUX)`,
               color: missingLinuxColor,
               path: currentPath,
-              diffType: "missingLinux", // Mark as missing LINUX
+              diffType: "missingLinux",
             });
           } else if (!(k in obj1)) {
-            result.push({ 
-              id: uniqueId, 
-              label: `${k}: ${JSON.stringify(obj2[k])} (Missing SUN)`, 
+            result.push({
+              id: uniqueId,
+              label: `${k}: ${JSON.stringify(obj2[k])} (Missing SUN)`,
               color: missingSunColor,
               path: currentPath,
-              diffType: "missingSun", // Mark as missing SUN
+              diffType: "missingSun",
             });
           } else if (typeof obj1[k] === "object" && typeof obj2[k] === "object") {
             const children = buildDiffTree(obj1[k], obj2[k], uniqueId, currentPath);
@@ -117,12 +129,12 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
             if (typeof obj1[k] === "number" && typeof obj2[k] === "number") {
               if (Math.abs(obj1[k] - obj2[k]) <= tolerance) return;
             }
-            result.push({ 
-              id: uniqueId, 
-              label: `${k}: ${obj1[k]} → ${obj2[k]}`, 
+            result.push({
+              id: uniqueId,
+              label: `${k}: ${obj1[k]} → ${obj2[k]}`,
               color: mismatchColor,
               path: currentPath,
-              diffType: "mismatches", // Mark as mismatch
+              diffType: "mismatches",
             });
           }
         });
@@ -173,7 +185,7 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
 
       const treeDiff = buildDiffTree(memoJson1, memoJson2);
       const tableDiff = buildDiffTable(memoJson1, memoJson2);
-      
+
       setDiffTree(treeDiff.length > 0 ? treeDiff : [{ id: "no-diff-0", label: "No differences found", color: "gray", path: [], diffType: null }]);
       setDiffTable(tableDiff.length > 0 ? tableDiff : [{ key: "No differences", sun: "", linux: "", color: "gray", diffType: null }]);
     }
@@ -182,30 +194,24 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
   useEffect(() => {
     if (!diffTree || !diffTable) return;
 
-    // Check if all diffTypes are unchecked
     const allDiffTypesUnchecked = !diffTypes.mismatches && !diffTypes.missingLinux && !diffTypes.missingSun;
 
     const filterTree = (nodes: any[]): any[] => {
       return nodes
         .map((node) => {
-          // Skip if all diffTypes are unchecked
           if (allDiffTypesUnchecked) return null;
 
-          // Apply diffTypes filtering first, independently of search
           const isAllowedDiffType = !node.diffType || diffTypes[node.diffType as keyof typeof diffTypes];
           if (!isAllowedDiffType) return null;
 
-          // Only show Missing LINUX (red) if that's the only type checked
           if (diffTypes.missingLinux && !diffTypes.mismatches && !diffTypes.missingSun) {
             if (node.diffType !== "missingLinux") return null;
           }
 
-          // Only show Missing SUN (orange) if that's the only type checked
           if (diffTypes.missingSun && !diffTypes.mismatches && !diffTypes.missingLinux) {
             if (node.diffType !== "missingSun") return null;
           }
 
-          // Apply search filtering if there's a query
           const matches = searchQuery && searchFields.fieldName && node.label.toLowerCase().includes(searchQuery.toLowerCase());
           const filteredChildren = node.children ? filterTree(node.children) : null;
           if (matches || (filteredChildren && filteredChildren.length > 0)) {
@@ -217,23 +223,18 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
     };
 
     const filterTable = (rows: any[]): any[] => {
-      // Skip if all diffTypes are unchecked
       if (allDiffTypesUnchecked) return [{ key: "No differences", sun: "", linux: "", color: "gray", diffType: null }];
 
-      // Apply diffTypes filtering first, independently of search
       let filteredByDiffType = rows.filter((item) => !item.diffType || diffTypes[item.diffType as keyof typeof diffTypes]);
 
-      // Only show Missing LINUX (red) if that's the only type checked
       if (diffTypes.missingLinux && !diffTypes.mismatches && !diffTypes.missingSun) {
         filteredByDiffType = filteredByDiffType.filter((item) => item.diffType === "missingLinux");
       }
 
-      // Only show Missing SUN (orange) if that's the only type checked
       if (diffTypes.missingSun && !diffTypes.mismatches && !diffTypes.missingLinux) {
         filteredByDiffType = filteredByDiffType.filter((item) => item.diffType === "missingSun");
       }
 
-      // Apply search filtering if there's a query
       if (searchQuery) {
         return filteredByDiffType.filter((item) => {
           const fieldNameMatch = searchFields.fieldName && item.key.toLowerCase().includes(searchQuery.toLowerCase());
@@ -248,13 +249,11 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
     let filteredTreeData = searchQuery ? filterTree(diffTree) : diffTree.filter((node) => !allDiffTypesUnchecked && (!node.diffType || diffTypes[node.diffType as keyof typeof diffTypes]));
     let filteredTableData = searchQuery ? filterTable(diffTable) : diffTable.filter((item) => !allDiffTypesUnchecked && (!item.diffType || diffTypes[item.diffType as keyof typeof diffTypes]));
 
-    // Special case: If only Missing LINUX is checked, filter to show only red entries
     if (diffTypes.missingLinux && !diffTypes.mismatches && !diffTypes.missingSun) {
       filteredTreeData = filteredTreeData.filter((node) => node.diffType === "missingLinux");
       filteredTableData = filteredTableData.filter((item) => item.diffType === "missingLinux");
     }
 
-    // Special case: If only Missing SUN is checked, filter to show only orange entries
     if (diffTypes.missingSun && !diffTypes.mismatches && !diffTypes.missingLinux) {
       filteredTreeData = filteredTreeData.filter((node) => node.diffType === "missingSun");
       filteredTableData = filteredTableData.filter((item) => item.diffType === "missingSun");
@@ -269,7 +268,6 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
     }
   }, [searchQuery, diffTree, diffTable, searchFields, diffTypes, diffId]);
 
-  // Helper function to extract all node IDs for expansion
   const extractAllIds = (nodes: any[]): string[] => {
     let ids: string[] = [];
     nodes.forEach((node) => {
@@ -294,7 +292,7 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
   const copyAsCSV = () => {
     const csvContent = [
       "Field Name,SUN,LINUX",
-      ...filteredTable.map(row => `${row.key},${row.sun},${row.linux}`)
+      ...filteredTable.map((row) => `${row.key},${row.sun},${row.linux}`),
     ].join("\n");
     navigator.clipboard.writeText(csvContent);
     alert("Table data copied to clipboard as CSV!");
@@ -315,118 +313,255 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
   };
 
   return (
-    <div className="flex flex-col" style={{ width: "100%" }}>
+    <Box
+      ref={containerRef} // Ref to scroll to
+      sx={{
+        width: "100%",
+        p: 3,
+        bgcolor: "background.default",
+        borderRadius: "20px",
+        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+        background: "linear-gradient(135deg, #1a202c 0%, #2d3748 100%)",
+        transition: "all 0.3s ease",
+        "&:hover": {
+          boxShadow: "0 12px 48px rgba(0, 0, 0, 0.3)",
+        },
+      }}
+    >
+      {/* Header */}
+      <Typography
+        variant="h5"
+        sx={{
+          color: "white",
+          textAlign: "center",
+          mb: 3,
+          fontWeight: 600,
+          textShadow: "0 1px 4px rgba(0, 0, 0, 0.2)",
+        }}
+      >
+        JSON Difference Viewer
+      </Typography>
+
       {/* Customization Dropdowns */}
-      <div style={{ display: "flex", flexDirection: "row", gap: "16px", justifyContent: "center", marginBottom: "16px" }}>
-        <FormControl sx={{ width: "150px" }} variant="outlined">
-          <InputLabel style={{ color: "white" }}>Mismatch Color</InputLabel>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          gap: 2,
+          justifyContent: "center",
+          mb: 3,
+          flexWrap: "wrap",
+        }}
+      >
+        <FormControl
+          sx={{
+            minWidth: "150px",
+            bgcolor: "rgba(255, 255, 255, 0.05)",
+            borderRadius: "8px",
+            "&:hover": { bgcolor: "rgba(255, 255, 255, 0.1)" },
+          }}
+          variant="outlined"
+        >
+          <InputLabel sx={{ color: "white" }}>Mismatch Color</InputLabel>
           <Select
             value={mismatchColor}
             onChange={(e) => setMismatchColor(e.target.value as string)}
             label="Mismatch Color"
-            sx={{ color: mismatchColor, backgroundColor: "#4f4c43", "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" } }}
-            MenuProps={{ PaperProps: { style: { backgroundColor: "#2e2c2c", color: "white" } } }}
+            sx={{
+              color: mismatchColor,
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+            }}
+            MenuProps={{
+              PaperProps: { sx: { bgcolor: "#2e2c2c", color: "white" } },
+            }}
           >
             {colorOptions.map((color) => (
-              <MenuItem key={color} value={color} style={{ color }}>{color.charAt(0).toUpperCase() + color.slice(1)}</MenuItem>
+              <MenuItem key={color} value={color} sx={{ color }}>
+                {color.charAt(0).toUpperCase() + color.slice(1)}
+              </MenuItem>
             ))}
           </Select>
         </FormControl>
-        <FormControl sx={{ width: "150px" }} variant="outlined">
-          <InputLabel style={{ color: "white" }}>Missing SUN Color</InputLabel>
+        <FormControl
+          sx={{
+            minWidth: "150px",
+            bgcolor: "rgba(255, 255, 255, 0.05)",
+            borderRadius: "8px",
+            "&:hover": { bgcolor: "rgba(255, 255, 255, 0.1)" },
+          }}
+          variant="outlined"
+        >
+          <InputLabel sx={{ color: "white" }}>Missing SUN Color</InputLabel>
           <Select
             value={missingSunColor}
             onChange={(e) => setMissingSunColor(e.target.value as string)}
             label="Missing SUN Color"
-            sx={{ color: missingSunColor, backgroundColor: "#4f4c43", "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" } }}
-            MenuProps={{ PaperProps: { style: { backgroundColor: "#2e2c2c", color: "white" } } }}
+            sx={{
+              color: missingSunColor,
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+            }}
+            MenuProps={{
+              PaperProps: { sx: { bgcolor: "#2e2c2c", color: "white" } },
+            }}
           >
             {colorOptions.map((color) => (
-              <MenuItem key={color} value={color} style={{ color }}>{color.charAt(0).toUpperCase() + color.slice(1)}</MenuItem>
+              <MenuItem key={color} value={color} sx={{ color }}>
+                {color.charAt(0).toUpperCase() + color.slice(1)}
+              </MenuItem>
             ))}
           </Select>
         </FormControl>
-        <FormControl sx={{ width: "150px" }} variant="outlined">
-          <InputLabel style={{ color: "white" }}>Missing LINUX Color</InputLabel>
+        <FormControl
+          sx={{
+            minWidth: "150px",
+            bgcolor: "rgba(255, 255, 255, 0.05)",
+            borderRadius: "8px",
+            "&:hover": { bgcolor: "rgba(255, 255, 255, 0.1)" },
+          }}
+          variant="outlined"
+        >
+          <InputLabel sx={{ color: "white" }}>Missing LINUX Color</InputLabel>
           <Select
             value={missingLinuxColor}
             onChange={(e) => setMissingLinuxColor(e.target.value as string)}
             label="Missing LINUX Color"
-            sx={{ color: missingLinuxColor, backgroundColor: "#4f4c43", "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" } }}
-            MenuProps={{ PaperProps: { style: { backgroundColor: "#2e2c2c", color: "white" } } }}
+            sx={{
+              color: missingLinuxColor,
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+            }}
+            MenuProps={{
+              PaperProps: { sx: { bgcolor: "#2e2c2c", color: "white" } },
+            }}
           >
             {colorOptions.map((color) => (
-              <MenuItem key={color} value={color} style={{ color }}>{color.charAt(0).toUpperCase() + color.slice(1)}</MenuItem>
+              <MenuItem key={color} value={color} sx={{ color }}>
+                {color.charAt(0).toUpperCase() + color.slice(1)}
+              </MenuItem>
             ))}
           </Select>
         </FormControl>
-      </div>
+      </Box>
 
       {/* Search Box, Checkboxes, and Notes */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px", justifyContent: "center", marginBottom: "16px", alignItems: "center" }}>
-        <div style={{ display: "flex", flexDirection: "row", gap: "16px", alignItems: "center" }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 2,
+          justifyContent: "center",
+          alignItems: "center",
+          mb: 3,
+        }}
+      >
+        <Box sx={{ display: "flex", flexDirection: "row", gap: 2, alignItems: "center", width: "100%", maxWidth: "600px" }}>
           <TextField
             label="Search by key"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             variant="outlined"
-            sx={{ marginBottom: "16px", width: "100%", maxWidth: "400px", backgroundColor: "#4f4c43", "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" } }}
-            InputProps={{ style: { color: "white" } }}
-            InputLabelProps={{ style: { color: "white" } }}
+            sx={{
+              width: "100%",
+              bgcolor: "rgba(255, 255, 255, 0.05)",
+              borderRadius: "8px",
+              "& .MuiInputBase-input": { color: "white" },
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+            }}
+            InputLabelProps={{ sx: { color: "white" } }}
           />
-          <FormGroup>
+          <FormGroup sx={{ display: "flex", flexDirection: "row", gap: 1 }}>
             <FormControlLabel
               control={<Checkbox checked={searchFields.fieldName} onChange={handleSearchFieldChange("fieldName")} sx={{ color: "white" }} />}
-              label={<span style={{ color: "white" }}>FieldName</span>}
+              label={<Typography sx={{ color: "white" }}>FieldName</Typography>}
             />
             <FormControlLabel
               control={<Checkbox checked={searchFields.sun} onChange={handleSearchFieldChange("sun")} sx={{ color: "white" }} />}
-              label={<span style={{ color: "white" }}>SUN</span>}
+              label={<Typography sx={{ color: "white" }}>SUN</Typography>}
             />
             <FormControlLabel
               control={<Checkbox checked={searchFields.linux} onChange={handleSearchFieldChange("linux")} sx={{ color: "white" }} />}
-              label={<span style={{ color: "white" }}>LINUX</span>}
+              label={<Typography sx={{ color: "white" }}>LINUX</Typography>}
             />
           </FormGroup>
-        </div>
+        </Box>
         <Tooltip title="Search filtering with these checkboxes applies only to the Table View, not the Tree View." placement="top" arrow>
-          <Typography variant="caption" sx={{ color: "white", textAlign: "center" }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: "white",
+              textAlign: "center",
+              bgcolor: "rgba(255, 255, 255, 0.1)",
+              p: 1,
+              borderRadius: "4px",
+            }}
+          >
             * Search filtering applies only to Table View
           </Typography>
         </Tooltip>
-        <div style={{ display: "flex", flexDirection: "row", gap: "16px", alignItems: "center" }}>
-          <FormGroup>
+        <Box sx={{ display: "flex", flexDirection: "row", gap: 2, alignItems: "center", width: "100%", maxWidth: "600px" }}>
+          <FormGroup sx={{ display: "flex", flexDirection: "row", gap: 1 }}>
             <FormControlLabel
               control={<Checkbox checked={diffTypes.mismatches} onChange={handleDiffTypeChange("mismatches")} sx={{ color: "white" }} />}
-              label={<span style={{ color: "white" }}>Mismatches</span>}
+              label={<Typography sx={{ color: "white" }}>Mismatches</Typography>}
             />
             <FormControlLabel
               control={<Checkbox checked={diffTypes.missingLinux} onChange={handleDiffTypeChange("missingLinux")} sx={{ color: "white" }} />}
-              label={<span style={{ color: "white" }}>Missing LINUX</span>}
+              label={<Typography sx={{ color: "white" }}>Missing LINUX</Typography>}
             />
             <FormControlLabel
               control={<Checkbox checked={diffTypes.missingSun} onChange={handleDiffTypeChange("missingSun")} sx={{ color: "white" }} />}
-              label={<span style={{ color: "white" }}>Missing SUN</span>}
+              label={<Typography sx={{ color: "white" }}>Missing SUN</Typography>}
             />
           </FormGroup>
-        </div>
+        </Box>
         <Tooltip title="These filters apply to both Tree View and Table View to show only specific types of differences, regardless of search." placement="top" arrow>
-          <Typography variant="caption" sx={{ color: "white", textAlign: "center" }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: "white",
+              textAlign: "center",
+              bgcolor: "rgba(255, 255, 255, 0.1)",
+              p: 1,
+              borderRadius: "4px",
+            }}
+          >
             * Difference type filtering applies to both views, regardless of search
           </Typography>
         </Tooltip>
-      </div>
+      </Box>
 
       {/* Tree View Section */}
-      <Card sx={{ backgroundColor: "#1a202c", color: "white", marginBottom: "16px" }}>
-        <Box sx={{ display: "flex", alignItems: "center", padding: "8px" }}>
+      <Paper
+        elevation={8}
+        sx={{
+          mb: 3,
+          bgcolor: "rgba(255, 255, 255, 0.05)",
+          borderRadius: "16px",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+          transition: "all 0.3s ease",
+          "&:hover": { boxShadow: "0 6px 20px rgba(0, 0, 0, 0.3)" },
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            padding: "12px",
+            bgcolor: "rgba(26, 32, 44, 0.8)",
+            borderTopLeftRadius: "16px",
+            borderTopRightRadius: "16px",
+          }}
+        >
           <IconButton onClick={() => setTreeOpen(!treeOpen)} sx={{ color: "white" }}>
             {treeOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
           </IconButton>
-          <span>Tree View</span>
+          <Typography sx={{ color: "white", fontWeight: 600 }}>Tree View</Typography>
         </Box>
         <Collapse in={treeOpen}>
-          <CardContent>
+          <CardContent sx={{ bgcolor: "#1a202c", borderBottomLeftRadius: "16px", borderBottomRightRadius: "16px" }}>
             {filteredTree && (
               <SimpleTreeView
                 expandedItems={treeOpen ? expandedItems : []}
@@ -434,9 +569,8 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
                 sx={{
                   "& .MuiTreeItem-label": { color: "inherit" },
                   "& .MuiTreeItem-iconContainer": { color: "white" },
-                  backgroundColor: "#1a202c",
-                  color: "white",
-                  minHeight: "100%",
+                  bgcolor: "#1a202c",
+                  minHeight: "300px",
                 }}
               >
                 {filteredTree.map(renderTree)}
@@ -444,39 +578,74 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
             )}
           </CardContent>
         </Collapse>
-      </Card>
+      </Paper>
 
       {/* Table View Section */}
-      <Card sx={{ backgroundColor: "#1a202c", color: "white" }}>
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px" }}>
+      <Paper
+        elevation={8}
+        sx={{
+          bgcolor: "rgba(255, 255, 255, 0.05)",
+          borderRadius: "16px",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+          transition: "all 0.3s ease",
+          "&:hover": { boxShadow: "0 6px 20px rgba(0, 0, 0, 0.3)" },
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px",
+            bgcolor: "rgba(26, 32, 44, 0.8)",
+            borderTopLeftRadius: "16px",
+            borderTopRightRadius: "16px",
+          }}
+        >
           <Box sx={{ display: "flex", alignItems: "center" }}>
             <IconButton onClick={() => setTableOpen(!tableOpen)} sx={{ color: "white" }}>
               {tableOpen ? <ExpandMoreIcon /> : <ChevronRightIcon />}
             </IconButton>
-            <span>Table View</span>
+            <Typography sx={{ color: "white", fontWeight: 600 }}>Table View</Typography>
           </Box>
-          <Button onClick={copyAsCSV} variant="contained" sx={{ backgroundColor: "#4f4c43", color: "white" }}>
+          <Button
+            onClick={copyAsCSV}
+            variant="contained"
+            sx={{
+              bgcolor: "#4f4c43",
+              color: "white",
+              borderRadius: "8px",
+              "&:hover": { bgcolor: "#3d3a34", transform: "translateY(-2px)" },
+              transition: "all 0.3s ease",
+            }}
+          >
             Copy as CSV
           </Button>
         </Box>
         <Collapse in={tableOpen}>
-          <CardContent>
+          <CardContent sx={{ bgcolor: "#1a202c", borderBottomLeftRadius: "16px", borderBottomRightRadius: "16px" }}>
             {filteredTable && (
               <TableContainer>
-                <Table sx={{ minWidth: 650, backgroundColor: "#1a202c" }}>
+                <Table sx={{ minWidth: 650, bgcolor: "#1a202c" }}>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ color: "white", fontWeight: "bold" }}>Field Name</TableCell>
-                      <TableCell sx={{ color: "white", fontWeight: "bold" }}>SUN</TableCell>
-                      <TableCell sx={{ color: "white", fontWeight: "bold" }}>LINUX</TableCell>
+                      <TableCell sx={{ color: "white", fontWeight: "bold", borderBottom: "2px solid rgba(255, 255, 255, 0.1)" }}>Field Name</TableCell>
+                      <TableCell sx={{ color: "white", fontWeight: "bold", borderBottom: "2px solid rgba(255, 255, 255, 0.1)" }}>SUN</TableCell>
+                      <TableCell sx={{ color: "white", fontWeight: "bold", borderBottom: "2px solid rgba(255, 255, 255, 0.1)" }}>LINUX</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {filteredTable.map((row) => (
-                      <TableRow key={row.key}>
-                        <TableCell sx={{ color: row.color }}>{row.key}</TableCell>
-                        <TableCell sx={{ color: row.color }}>{row.sun}</TableCell>
-                        <TableCell sx={{ color: row.color }}>{row.linux}</TableCell>
+                      <TableRow
+                        key={row.key}
+                        sx={{
+                          "&:hover": { bgcolor: "rgba(255, 255, 255, 0.05)" },
+                          transition: "all 0.2s ease",
+                        }}
+                      >
+                        <TableCell sx={{ color: row.color, py: 1 }}>{row.key}</TableCell>
+                        <TableCell sx={{ color: row.color, py: 1 }}>{row.sun}</TableCell>
+                        <TableCell sx={{ color: row.color, py: 1 }}>{row.linux}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -485,9 +654,9 @@ const JsonDiffViewer: React.FC<JsonDiffViewerProps> = ({ json1, json2, tolerance
             )}
           </CardContent>
         </Collapse>
-      </Card>
-    </div>
+      </Paper>
+    </Box>
   );
-};
+});
 
 export default JsonDiffViewer;
