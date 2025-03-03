@@ -1,3 +1,4 @@
+// components/DiffSelectionPage.tsx
 import React, { useState, useEffect } from "react";
 import {
   Card,
@@ -18,6 +19,8 @@ import {
   Typography,
   Checkbox,
   ListItemText,
+  CircularProgress,
+  Paper,
 } from "@mui/material";
 import { fetchDiffData, fetchDiffGroups, fetchEnvironmentsToDiff, fetchServicesToDiff } from "../services/dataService";
 
@@ -44,7 +47,7 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
   const [diffGroups, setDiffGroups] = useState<Record<string, { diffId: string; json1: any; json2: any }[]>>({});
   const [filterFields, setFilterFields] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedDiffIds, setSelectedDiffIds] = useState<Record<string, string>>({}); // New state for tracking selections
+  const [selectedDiffIds, setSelectedDiffIds] = useState<Record<string, string>>({});
 
   const services = fetchServicesToDiff();
   const environments = fetchEnvironmentsToDiff();
@@ -61,7 +64,6 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
           )
       )];
       setFilterFields(uniqueDiffFields);
-      // Initialize selectedDiffIds with first diffId from each group
       const initialSelections = Object.fromEntries(
         Object.entries(parsedGroups).map(([groupKey, diffs]) => [groupKey, diffs[0]?.diffId || ""])
       );
@@ -82,7 +84,6 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
           ),
         ];
         setFilterFields(uniqueDiffFields);
-        // Initialize selections for new groups
         const initialSelections = Object.fromEntries(
           Object.entries(groups).map(([groupKey, diffs]) => [groupKey, diffs[0]?.diffId || ""])
         );
@@ -136,7 +137,6 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
       ...prev,
       [groupKey]: selectedDiffId
     }));
-    // Removed automatic onSelectDiffId call - now only triggers on View Diff click
   };
 
   const handleViewDiffClick = (groupKey: string) => {
@@ -181,7 +181,6 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
     ),
   ];
 
-  // Updated filtering logic - show groups where ANY selected filter field is present
   const filteredDiffGroups = filterFields.length > 0 && diffGroups
     ? Object.fromEntries(
         Object.entries(diffGroups).filter(([groupKey]) =>
@@ -203,209 +202,399 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
   };
 
   return (
-    <div style={{ width: "100%", maxWidth: "1280px", padding: "16px" }}>
-      <Card sx={{ backgroundColor: "#1a202c", color: "white", marginBottom: "16px", borderRadius: "12px", boxShadow: "0 4px 8px rgba(0, 0, 0, 0.2)" }}>
-        <CardContent>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: "24px", padding: "24px" }}>
-            <Typography variant="h4" sx={{ color: "white", fontWeight: "bold", textAlign: "center" }}>
-              Diff Selection
-            </Typography>
-            <Typography variant="body1" sx={{ color: "#d3d3d3", textAlign: "center" }}>
-              Select service, environment, and date range to compare differences.
-            </Typography>
-            <Box sx={{ display: "flex", gap: "24px", justifyContent: "center" }}>
-              <FormControl sx={{ minWidth: "200px" }} variant="outlined">
-                <InputLabel style={{ color: "white" }}>Service</InputLabel>
-                <Select
-                  value={service}
-                  onChange={(e) => setService(e.target.value as string)}
-                  label="Service"
-                  sx={{ color: "orange", backgroundColor: "#4f4c43", "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" } }}
-                  MenuProps={{ PaperProps: { style: { backgroundColor: "#2e2c2c", color: "white" } } }}
-                >
-                  {services.map((s) => (
-                    <MenuItem key={s} value={s} style={{ color: "white" }}>{s}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl sx={{ minWidth: "200px" }} variant="outlined">
-                <InputLabel style={{ color: "white" }}>Environment</InputLabel>
-                <Select
-                  value={environment}
-                  onChange={(e) => setEnvironment(e.target.value as string)}
-                  label="Environment"
-                  sx={{ color: "orange", backgroundColor: "#4f4c43", "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" } }}
-                  MenuProps={{ PaperProps: { style: { backgroundColor: "#2e2c2c", color: "white" } } }}
-                >
-                  {environments.map((env) => (
-                    <MenuItem key={env} value={env} style={{ color: "white" }}>{env}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-            <Box sx={{ display: "flex", gap: "24px", justifyContent: "center", alignItems: "center" }}>
-              <TextField
-                label="Start Date (YYYY-MM-DD)"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                variant="outlined"
-                sx={{ 
-                  backgroundColor: "#4f4c43", 
-                  maxWidth: "200px",
-                  "& .MuiInputBase-input": { color: "white" },
-                  "& .MuiInputLabel-root": { color: "white" },
-                  "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" },
-                }}
-                InputProps={{ style: { color: "white" } }}
-                InputLabelProps={{ style: { color: "white" } }}
-              />
-              <Typography style={{ color: "white" }}>to</Typography>
-              <TextField
-                label="End Date (YYYY-MM-DD)"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                variant="outlined"
-                sx={{ 
-                  backgroundColor: "#4f4c43", 
-                  maxWidth: "200px",
-                  "& .MuiInputBase-input": { color: "white" },
-                  "& .MuiInputLabel-root": { color: "white" },
-                  "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" },
-                }}
-                InputProps={{ style: { color: "white" } }}
-                InputLabelProps={{ style: { color: "white" } }}
-              />
-            </Box>
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
-              <Button
-                variant="contained"
-                onClick={handleCompareClick}
-                disabled={loading}
-                sx={{ backgroundColor: "#3b82f6", maxWidth: "200px", padding: "10px 20px", fontSize: "16px" }}
-              >
-                {loading ? "Loading..." : "Compare"}
-              </Button>
-              {Object.keys(diffGroups).length === 0 && !loading && (
-                <Typography
-                  variant="body1"
+    <Box
+      sx={{
+        width: "100%",
+        maxWidth: "1280px",
+        p: 3,
+        bgcolor: "background.default",
+        borderRadius: "20px",
+        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+        background: "linear-gradient(135deg, #1a202c 0%, #2d3748 100%)",
+        transition: "all 0.3s ease",
+        "&:hover": {
+          boxShadow: "0 12px 48px rgba(0, 0, 0, 0.3)",
+        },
+      }}
+    >
+      {/* Header */}
+      <Typography
+        variant="h4"
+        sx={{
+          color: "white",
+          textAlign: "center",
+          mb: 3,
+          fontWeight: 700,
+          textShadow: "0 1px 4px rgba(0, 0, 0, 0.2)",
+        }}
+      >
+        Live Diff Selection
+      </Typography>
+
+      {/* Subtitle */}
+      <Typography
+        variant="body1"
+        sx={{
+          color: "#d3d3d3",
+          textAlign: "center",
+          mb: 4,
+          fontStyle: "italic",
+        }}
+      >
+        Select service, environment, and date range to find all diffs, grouped by fields
+      </Typography>
+
+      {/* Filters */}
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", sm: "row" },
+          gap: 3,
+          mb: 4,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <FormControl
+          sx={{
+            minWidth: "200px",
+            bgcolor: "rgba(255, 255, 255, 0.05)",
+            borderRadius: "8px",
+            "&:hover": { bgcolor: "rgba(255, 255, 255, 0.1)" },
+          }}
+          variant="outlined"
+        >
+          <InputLabel sx={{ color: "white" }}>Service</InputLabel>
+          <Select
+            value={service}
+            onChange={(e) => setService(e.target.value as string)}
+            label="Service"
+            sx={{
+              color: "#ff9800", // Orange input text
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+            }}
+            MenuProps={{ PaperProps: { sx: { bgcolor: "#2e2c2c", color: "white" } } }}
+          >
+            {services.map((s) => (
+              <MenuItem key={s} value={s} sx={{ color: "white" }}>
+                {s}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <FormControl
+          sx={{
+            minWidth: "200px",
+            bgcolor: "rgba(255, 255, 255, 0.05)",
+            borderRadius: "8px",
+            "&:hover": { bgcolor: "rgba(255, 255, 255, 0.1)" },
+          }}
+          variant="outlined"
+        >
+          <InputLabel sx={{ color: "white" }}>Environment</InputLabel>
+          <Select
+            value={environment}
+            onChange={(e) => setEnvironment(e.target.value as string)}
+            label="Environment"
+            sx={{
+              color: "#ff9800", // Orange input text
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+            }}
+            MenuProps={{ PaperProps: { sx: { bgcolor: "#2e2c2c", color: "white" } } }}
+          >
+            {environments.map((env) => (
+              <MenuItem key={env} value={env} sx={{ color: "white" }}>
+                {env}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
+
+      {/* Date Range */}
+      <Box
+        sx={{
+          display: "flex",
+          gap: 3,
+          mb: 4,
+          justifyContent: "center",
+          alignItems: "center",
+          flexDirection: { xs: "column", sm: "row" },
+        }}
+      >
+        <TextField
+          label="Start Date (YYYY-MM-DD)"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          variant="outlined"
+          sx={{
+            maxWidth: "200px",
+            bgcolor: "rgba(255, 255, 255, 0.05)",
+            borderRadius: "8px",
+            "& .MuiInputBase-input": { color: "#ff9800" }, // Orange input text
+            "& .MuiInputLabel-root": { color: "white" },
+            "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+            "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+          }}
+          InputProps={{ style: { color: "#ff9800" } }}
+          InputLabelProps={{ sx: { color: "white" } }}
+        />
+        <Typography sx={{ color: "white", fontWeight: 600 }}>to</Typography>
+        <TextField
+          label="End Date (YYYY-MM-DD)"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+          variant="outlined"
+          sx={{
+            maxWidth: "200px",
+            bgcolor: "rgba(255, 255, 255, 0.05)",
+            borderRadius: "8px",
+            "& .MuiInputBase-input": { color: "#ff9800" }, // Orange input text
+            "& .MuiInputLabel-root": { color: "white" },
+            "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+            "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+          }}
+          InputProps={{ style: { color: "#ff9800" } }}
+          InputLabelProps={{ sx: { color: "white" } }}
+        />
+      </Box>
+
+      {/* Compare Button */}
+      <Box sx={{ display: "flex", justifyContent: "center", mb: 4 }}>
+        <Button
+          variant="contained"
+          onClick={handleCompareClick}
+          disabled={loading}
+          sx={{
+            background: "linear-gradient(45deg, #1e3a8a, #3b82f6)",
+            borderRadius: "12px",
+            padding: "12px 24px",
+            fontWeight: 600,
+            textTransform: "none",
+            color: "white",
+            boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
+            transition: "all 0.3s ease",
+            "&:hover": {
+              background: "linear-gradient(45deg, #1e40af, #60a5fa)",
+              transform: "translateY(-2px)",
+              boxShadow: "0 6px 20px rgba(0, 0, 0, 0.3)",
+            },
+            "&:disabled": {
+              background: "#4f4c43",
+              boxShadow: "none",
+            },
+          }}
+        >
+          {loading ? <CircularProgress size={20} sx={{ color: "white" }} /> : "Compare"}
+        </Button>
+      </Box>
+
+      {/* No Results Message */}
+      {Object.keys(diffGroups).length === 0 && !loading && (
+        <Typography
+          variant="body1"
+          sx={{
+            color: "#ff4444",
+            fontWeight: "bold",
+            backgroundColor: "rgba(255, 68, 68, 0.1)",
+            p: 2,
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+            textAlign: "center",
+            mb: 3,
+          }}
+        >
+          No results found
+        </Typography>
+      )}
+
+      {/* Filter by Fields */}
+      <FormControl
+        sx={{
+          minWidth: "200px",
+          mb: 4,
+          bgcolor: "rgba(255, 255, 255, 0.05)",
+          borderRadius: "8px",
+          "&:hover": { bgcolor: "rgba(255, 255, 255, 0.1)" },
+        }}
+        variant="outlined"
+        disabled={loading || Object.keys(diffGroups).length === 0}
+      >
+        <InputLabel sx={{ color: "white" }}>Filter by Fields</InputLabel>
+        <Select
+          multiple
+          value={filterFields}
+          onChange={handleFilterChange}
+          renderValue={(selected) => (selected as string[]).join(", ")}
+          label="Filter by Fields"
+          sx={{
+            color: "#ff9800", // Orange input text
+            "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+            "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+          }}
+          MenuProps={{ PaperProps: { sx: { bgcolor: "#2e2c2c", color: "white" } } }}
+        >
+          {allDiffFields.map((field) => (
+            <MenuItem key={field} value={field}>
+              <Checkbox checked={filterFields.includes(field)} sx={{ color: "white" }} />
+              <ListItemText primary={field} sx={{ color: "white" }} />
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+
+      {/* Diff Table */}
+      <Paper
+        elevation={8}
+        sx={{
+          bgcolor: "rgba(255, 255, 255, 0.05)",
+          borderRadius: "16px",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+          transition: "all 0.3s ease",
+          "&:hover": { boxShadow: "0 6px 20px rgba(0, 0, 0, 0.3)" },
+          mb: 3,
+        }}
+      >
+        <TableContainer sx={{ borderRadius: "16px", overflow: "hidden" }}>
+          <Table sx={{ backgroundColor: "#1a202c", color: "white" }}>
+            <TableHead>
+              <TableRow>
+                <TableCell
                   sx={{
-                    color: "#ff4444",
+                    color: "white",
                     fontWeight: "bold",
-                    backgroundColor: "rgba(255, 68, 68, 0.1)",
-                    padding: "8px 16px",
-                    borderRadius: "4px",
-                    border: "1px solid #ff4444",
-                    marginTop: "8px",
+                    backgroundColor: "rgba(46, 44, 44, 0.8)",
+                    padding: "16px",
+                    borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
                   }}
                 >
-                  No results found
-                </Typography>
-              )}
-            </Box>
-            <FormControl sx={{ minWidth: "200px", mb: 2 }} variant="outlined">
-              <InputLabel style={{ color: "white" }}>Filter by Fields</InputLabel>
-              <Select
-                multiple
-                value={filterFields}
-                onChange={handleFilterChange}
-                renderValue={(selected) => (selected as string[]).join(", ")}
-                label="Filter by Fields"
-                sx={{ color: "orange", backgroundColor: "#4f4c43", "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" } }}
-                MenuProps={{ PaperProps: { style: { backgroundColor: "#2e2c2c", color: "white" } } }}
-                disabled={loading || Object.keys(diffGroups).length === 0}
-              >
-                {allDiffFields.map((field) => (
-                  <MenuItem key={field} value={field}>
-                    <Checkbox checked={filterFields.includes(field)} />
-                    <ListItemText primary={field} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TableContainer>
-              <Table sx={{ backgroundColor: "#1a202c", color: "white", borderRadius: "8px", overflow: "hidden" }}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ color: "white", fontWeight: "bold", backgroundColor: "#2e2c2c", padding: "12px" }}>Difference Fields</TableCell>
-                    <TableCell sx={{ color: "white", fontWeight: "bold", backgroundColor: "#2e2c2c", padding: "12px" }}>Diff IDs</TableCell>
-                    <TableCell sx={{ color: "white", fontWeight: "bold", backgroundColor: "#2e2c2c", padding: "12px" }}>Actions</TableCell>
+                  Different Fields
+                </TableCell>
+                <TableCell
+                  sx={{
+                    color: "white",
+                    fontWeight: "bold",
+                    backgroundColor: "rgba(46, 44, 44, 0.8)",
+                    padding: "16px",
+                    borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
+                  }}
+                >
+                  Diff IDs
+                </TableCell>
+                <TableCell
+                  sx={{
+                    color: "white",
+                    fontWeight: "bold",
+                    backgroundColor: "rgba(46, 44, 44, 0.8)",
+                    padding: "16px",
+                    borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
+                  }}
+                >
+                  Actions
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {Object.entries(filteredDiffGroups || {}).map(([groupKey, diffs]) => {
+                const selectedDiffId = selectedDiffIds[groupKey] || diffs[0]?.diffId || "";
+                return (
+                  <TableRow
+                    key={groupKey}
+                    sx={{
+                      "&:nth-of-type(odd)": { backgroundColor: "rgba(46, 44, 44, 0.6)" },
+                      "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.1)" },
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <TableCell sx={{ color: "white", padding: "16px" }}>
+                      {renderStackedFields(groupKey)}
+                    </TableCell>
+                    <TableCell sx={{ color: "white", padding: "16px" }}>
+                      <FormControl
+                        sx={{
+                          minWidth: "200px",
+                          bgcolor: "rgba(255, 255, 255, 0.05)",
+                          borderRadius: "8px",
+                        }}
+                        variant="outlined"
+                      >
+                        <InputLabel sx={{ color: "white" }}>Select Diff ID</InputLabel>
+                        <Select
+                          value={selectedDiffId}
+                          onChange={(e) => handleDiffIdChange(groupKey, e)}
+                          label="Select Diff ID"
+                          sx={{
+                            color: "#ff9800", // Orange input text
+                            "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+                            "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+                          }}
+                          MenuProps={{ PaperProps: { sx: { bgcolor: "#2e2c2c", color: "white" } } }}
+                          disabled={loading}
+                        >
+                          {diffs.map((diff) => (
+                            <MenuItem key={diff.diffId} value={diff.diffId} sx={{ color: "white" }}>
+                              {diff.diffId}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </TableCell>
+                    <TableCell sx={{ color: "white", padding: "16px" }}>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        <Button
+                          variant="contained"
+                          onClick={() => handleViewDiffClick(groupKey)}
+                          disabled={loading}
+                          sx={{
+                            background: "linear-gradient(45deg, #1e3a8a, #3b82f6)",
+                            borderRadius: "8px",
+                            padding: "8px 16px",
+                            "&:hover": {
+                              background: "linear-gradient(45deg, #1e40af, #60a5fa)",
+                              transform: "translateY(-2px)",
+                            },
+                            transition: "all 0.3s ease",
+                          }}
+                        >
+                          View Diff
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          onClick={() => handleHumioLinkClick(groupKey)}
+                          disabled={loading}
+                          sx={{
+                            color: "white",
+                            borderColor: "#3b82f6",
+                            borderRadius: "8px",
+                            padding: "8px 16px",
+                            "&:hover": {
+                              backgroundColor: "#3b82f6",
+                              borderColor: "#3b82f6",
+                            },
+                            transition: "all 0.3s ease",
+                          }}
+                        >
+                          Humio Link
+                        </Button>
+                      </Box>
+                    </TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {Object.entries(filteredDiffGroups || {}).map(([groupKey, diffs]) => {
-                    const selectedDiffId = selectedDiffIds[groupKey] || diffs[0]?.diffId || "";
-                    return (
-                      <TableRow key={groupKey} sx={{ "&:nth-of-type(odd)": { backgroundColor: "#2e2c2c" } }}>
-                        <TableCell sx={{ color: "white", padding: "12px" }}>
-                          {renderStackedFields(groupKey)}
-                        </TableCell>
-                        <TableCell sx={{ color: "white", padding: "12px" }}>
-                          <FormControl sx={{ minWidth: "200px" }} variant="outlined">
-                            <InputLabel style={{ color: "white" }}>Select Diff ID</InputLabel>
-                            <Select
-                              value={selectedDiffId}
-                              onChange={(e) => handleDiffIdChange(groupKey, e)}
-                              label="Select Diff ID"
-                              sx={{ color: "orange", backgroundColor: "#4f4c43", "& .MuiOutlinedInput-notchedOutline": { borderColor: "white" } }}
-                              MenuProps={{ PaperProps: { style: { backgroundColor: "#2e2c2c", color: "white" } } }}
-                              disabled={loading}
-                            >
-                              {diffs.map((diff) => (
-                                <MenuItem key={diff.diffId} value={diff.diffId} style={{ color: "white" }}>
-                                  {diff.diffId}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        </TableCell>
-                        <TableCell sx={{ color: "white", padding: "12px" }}>
-                          <Box sx={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                            <Button
-                              variant="contained"
-                              onClick={() => handleViewDiffClick(groupKey)}
-                              disabled={loading}
-                              sx={{ backgroundColor: "#3b82f6", padding: "8px 16px" }}
-                            >
-                              View Diff
-                            </Button>
-                            <Button
-                              variant="outlined"
-                              onClick={() => handleHumioLinkClick(groupKey)}
-                              disabled={loading}
-                              sx={{ 
-                                color: "white", 
-                                borderColor: "#3b82f6", 
-                                "&:hover": { backgroundColor: "#3b82f6" },
-                                padding: "8px 16px"
-                              }}
-                            >
-                              Humio Link
-                            </Button>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            {loading && (
-              <Typography
-                variant="body1"
-                sx={{
-                  color: "#ffffff",
-                  fontWeight: "bold",
-                  textAlign: "center",
-                  marginTop: "16px",
-                }}
-              >
-                Loading diffs...
-              </Typography>
-            )}
-          </Box>
-        </CardContent>
-      </Card>
-    </div>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
+
+      {/* Loading Indicator */}
+      {loading && (
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+          <CircularProgress sx={{ color: "white" }} />
+        </Box>
+      )}
+    </Box>
   );
 };
 
