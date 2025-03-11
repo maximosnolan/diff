@@ -1,4 +1,3 @@
-// components/DiffSelectionPage.tsx
 import React, { useState, useEffect } from "react";
 import {
   Card,
@@ -21,8 +20,14 @@ import {
   ListItemText,
   CircularProgress,
   Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  IconButton,
 } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import { fetchDiffData, fetchDiffGroups, fetchEnvironmentsToDiff, fetchServicesToDiff } from "../services/dataService";
+import { useNavigate } from "react-router-dom";
 
 interface DiffSelectionPageProps {
   onSelectDiffId: (
@@ -40,14 +45,21 @@ interface DiffSelectionPageProps {
 declare function fetchHumioLink(environment: string, diffId: string, serviceName: string): Promise<string>;
 
 const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId }) => {
+  const navigate = useNavigate();
   const [service, setService] = useState("TKTAPIAccessor");
   const [environment, setEnvironment] = useState("DEV");
   const [startDate, setStartDate] = useState("2023-01-01");
   const [endDate, setEndDate] = useState("2023-12-31");
+  const [relativeTime, setRelativeTime] = useState("");
+  const [useRelativeTime, setUseRelativeTime] = useState(false);
   const [diffGroups, setDiffGroups] = useState<Record<string, { diffId: string; json1: any; json2: any }[]>>({});
   const [filterFields, setFilterFields] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDiffIds, setSelectedDiffIds] = useState<Record<string, string>>({});
+  const [openDialog, setOpenDialog] = useState(false);
+  const [selectedJson1, setSelectedJson1] = useState<any | null>(null);
+  const [selectedJson2, setSelectedJson2] = useState<any | null>(null);
+  const [selectedDiffId, setSelectedDiffId] = useState<string | null>(null);
 
   const services = fetchServicesToDiff();
   const environments = fetchEnvironmentsToDiff();
@@ -57,12 +69,13 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
     if (cachedDiffGroups) {
       const parsedGroups = JSON.parse(cachedDiffGroups);
       setDiffGroups(parsedGroups);
-      const uniqueDiffFields = [...new Set(
-        Object.values(parsedGroups)
-          .flatMap((group) => 
-            group.flatMap(diff => getDifferentFields(diff.json1, diff.json2))
+      const uniqueDiffFields = [
+        ...new Set(
+          Object.values(parsedGroups).flatMap((group) =>
+            group.flatMap((diff) => getDifferentFields(diff.json1, diff.json2))
           )
-      )];
+        ),
+      ];
       setFilterFields(uniqueDiffFields);
       const initialSelections = Object.fromEntries(
         Object.entries(parsedGroups).map(([groupKey, diffs]) => [groupKey, diffs[0]?.diffId || ""])
@@ -72,15 +85,40 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
   }, []);
 
   const handleCompareClick = async () => {
-    if (service && environment && startDate && endDate) {
+    if (service && environment) {
       setLoading(true);
       try {
-        const groups = await fetchDiffGroups(service, environment, startDate, endDate);
+        let start, end;
+        if (useRelativeTime && relativeTime) {
+          const match = relativeTime.match(/^(-?\d+)([hmd])$/);
+          if (!match) {
+            throw new Error("Invalid relative time format. Use e.g., -1h, -30m, -2d");
+          }
+          const [_, value, unit] = match;
+          const numValue = parseInt(value);
+          end = new Date();
+          start = new Date();
+
+          if (unit === "h") start.setHours(end.getHours() + numValue);
+          else if (unit === "m") start.setMinutes(end.getMinutes() + numValue);
+          else if (unit === "d") start.setDate(end.getDate() + numValue);
+
+          start = start.toISOString().split("T")[0];
+          end = end.toISOString().split("T")[0];
+        } else if (startDate && endDate) {
+          start = startDate;
+          end = endDate;
+        } else {
+          throw new Error("Please provide either date range or relative time");
+        }
+
+        const groups = await fetchDiffGroups(service, environment, start, end);
         setDiffGroups(groups);
         const uniqueDiffFields = [
           ...new Set(
-            Object.values(groups)
-              .flatMap(group => group.flatMap(diff => getDifferentFields(diff.json1, diff.json2)))
+            Object.values(groups).flatMap((group) =>
+              group.flatMap((diff) => getDifferentFields(diff.json1, diff.json2))
+            )
           ),
         ];
         setFilterFields(uniqueDiffFields);
@@ -91,6 +129,7 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
         localStorage.setItem("diffGroups", JSON.stringify(groups));
       } catch (error) {
         console.error("Error fetching diff groups:", error);
+        alert(error.message || "Error fetching diff groups");
       } finally {
         setLoading(false);
       }
@@ -116,7 +155,7 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
       } else if (typeof json2[key] === "object" && json2[key] !== null) {
         const nestedDiffs = getDifferentFields(json1[key], json2[key]);
         if (nestedDiffs.length > 0) {
-          diffs.push(...nestedDiffs.map(d => `${key}.${d}`));
+          diffs.push(...nestedDiffs.map((d) => `${key}.${d}`));
         }
       } else {
         diffs.push(key);
@@ -133,13 +172,24 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
 
   const handleDiffIdChange = (groupKey: string, event: any) => {
     const selectedDiffId = event.target.value;
-    setSelectedDiffIds(prev => ({
+    setSelectedDiffIds((prev) => ({
       ...prev,
-      [groupKey]: selectedDiffId
+      [groupKey]: selectedDiffId,
     }));
   };
 
   const handleViewDiffClick = (groupKey: string) => {
+    const selectedDiffId = selectedDiffIds[groupKey];
+    const selectedDiff = diffGroups[groupKey].find((diff) => diff.diffId === selectedDiffId);
+    if (selectedDiff) {
+      setSelectedJson1(selectedDiff.json1);
+      setSelectedJson2(selectedDiff.json2);
+      setSelectedDiffId(selectedDiff.diffId);
+      setOpenDialog(true);
+    }
+  };
+
+  const handleViewInDiffExplorer = (groupKey: string) => {
     const selectedDiffId = selectedDiffIds[groupKey];
     const selectedDiff = diffGroups[groupKey].find((diff) => diff.diffId === selectedDiffId);
     if (selectedDiff) {
@@ -155,6 +205,7 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
         service,
         "999"
       );
+      navigate("/"); // Assuming "/" is the home page route
     }
   };
 
@@ -162,7 +213,7 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
     const selectedDiffId = selectedDiffIds[groupKey];
     try {
       const humioUrl = await fetchHumioLink(environment, selectedDiffId, service);
-      window.open(humioUrl, '_blank');
+      window.open(humioUrl, "_blank");
     } catch (error) {
       console.error("Error fetching Humio link:", error);
       alert("Failed to fetch Humio link. Please try again.");
@@ -170,36 +221,96 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
   };
 
   const handleFilterChange = (event: any) => {
-    const newFilterFields = typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value;
+    const newFilterFields =
+      typeof event.target.value === "string" ? event.target.value.split(",") : event.target.value;
     setFilterFields(newFilterFields);
   };
 
   const allDiffFields = [
     ...new Set(
-      Object.values(diffGroups || {})
-        .flatMap(group => group.flatMap(diff => getDifferentFields(diff.json1, diff.json2)))
+      Object.values(diffGroups || {}).flatMap((group) =>
+        group.flatMap((diff) => getDifferentFields(diff.json1, diff.json2))
+      )
     ),
   ];
 
-  const filteredDiffGroups = filterFields.length > 0 && diffGroups
-    ? Object.fromEntries(
-        Object.entries(diffGroups).filter(([groupKey]) =>
-          filterFields.some(field => 
-            getDifferentFields(
-              diffGroups[groupKey][0].json1,
-              diffGroups[groupKey][0].json2
-            ).includes(field)
+  const filteredDiffGroups =
+    filterFields.length > 0 && diffGroups
+      ? Object.fromEntries(
+          Object.entries(diffGroups).filter(([groupKey]) =>
+            filterFields.some((field) =>
+              getDifferentFields(diffGroups[groupKey][0].json1, diffGroups[groupKey][0].json2).includes(
+                field
+              )
+            )
           )
         )
-      )
-    : diffGroups || {};
+      : diffGroups || {};
 
   const renderStackedFields = (groupKey: string | undefined) => {
     if (!groupKey) return null;
     return groupKey.split(",").map((field, index) => (
-      <Typography key={index} sx={{ color: "white", display: "block", padding: "2px 0" }}>{field}</Typography>
+      <Typography key={index} sx={{ color: "white", display: "block", padding: "2px 0" }}>
+        {field}
+      </Typography>
     ));
   };
+
+  const buildDiffTable = (json1: any, json2: any, prefix: string = "") => {
+    let result: any[] = [];
+    const allKeys = new Set([...Object.keys(json1 || {}), ...Object.keys(json2 || {})]);
+
+    allKeys.forEach((k) => {
+      const fullKey = prefix ? `${prefix}.${k}` : k;
+      const value1 = k in json1 ? json1[k] : undefined;
+      const value2 = k in json2 ? json2[k] : undefined;
+
+      if (typeof value1 === "object" && typeof value2 === "object" && value1 && value2) {
+        result.push(...buildDiffTable(value1, value2, fullKey));
+      } else {
+        let color = "white";
+        let diffType: "mismatches" | "missingLinux" | "missingSun" | null = null;
+        if (!(k in json2)) {
+          color = "red"; // Default missingLinuxColor
+          diffType = "missingLinux";
+        } else if (!(k in json1)) {
+          color = "orange"; // Default missingSunColor
+          diffType = "missingSun";
+        } else if (value1 !== value2) {
+          if (typeof value1 === "number" && typeof value2 === "number") {
+            if (Math.abs(value1 - value2) <= 0.0001) return;
+          }
+          color = "yellow"; // Default mismatchColor
+          diffType = "mismatches";
+        } else {
+          return; // Skip identical values
+        }
+
+        result.push({
+          key: fullKey,
+          sun: value1 !== undefined ? JSON.stringify(value1) : "missing",
+          linux: value2 !== undefined ? JSON.stringify(value2) : "missing",
+          color,
+          diffType,
+        });
+      }
+    });
+    return result.length > 0 ? result : []; // Return empty array if no differences
+  };
+
+  const diffTable = selectedJson1 && selectedJson2 ? buildDiffTable(selectedJson1, selectedJson2) : [];
+
+  const copyAsCSV = () => {
+    const csvContent = ["Field Name,SUN,LINUX", ...diffTable.map((row) => `${row.key},${row.sun},${row.linux}`)].join(
+      "\n"
+    );
+    navigator.clipboard.writeText(csvContent);
+    alert("Table data copied to clipboard as CSV!");
+  };
+
+  const timeRangeDescription = useRelativeTime
+    ? `the last ${relativeTime} (e.g., -1h = 1 hour ago, -2d = 2 days ago)`
+    : `${startDate} to ${endDate}`;
 
   return (
     <Box
@@ -217,7 +328,6 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
         },
       }}
     >
-      {/* Header */}
       <Typography
         variant="h4"
         sx={{
@@ -231,7 +341,6 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
         Live Diff Selection
       </Typography>
 
-      {/* Subtitle */}
       <Typography
         variant="body1"
         sx={{
@@ -241,10 +350,9 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
           fontStyle: "italic",
         }}
       >
-        Select service, environment, and date range to find all diffs, grouped by fields
+        Select service, environment, and date range or relative time to find all diffs, grouped by fields
       </Typography>
 
-      {/* Filters */}
       <Box
         sx={{
           display: "flex",
@@ -270,7 +378,7 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
             onChange={(e) => setService(e.target.value as string)}
             label="Service"
             sx={{
-              color: "#ff9800", // Orange input text
+              color: "#ff9800",
               "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
               "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
             }}
@@ -298,7 +406,7 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
             onChange={(e) => setEnvironment(e.target.value as string)}
             label="Environment"
             sx={{
-              color: "#ff9800", // Orange input text
+              color: "#ff9800",
               "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
               "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
             }}
@@ -313,7 +421,6 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
         </FormControl>
       </Box>
 
-      {/* Date Range */}
       <Box
         sx={{
           display: "flex",
@@ -324,44 +431,76 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
           flexDirection: { xs: "column", sm: "row" },
         }}
       >
-        <TextField
-          label="Start Date (YYYY-MM-DD)"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
+        {!useRelativeTime ? (
+          <>
+            <TextField
+              label="Start Date (YYYY-MM-DD)"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              variant="outlined"
+              sx={{
+                maxWidth: "200px",
+                bgcolor: "rgba(255, 255, 255, 0.05)",
+                borderRadius: "8px",
+                "& .MuiInputBase-input": { color: "#ff9800" },
+                "& .MuiInputLabel-root": { color: "white" },
+                "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+                "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+              }}
+              InputProps={{ style: { color: "#ff9800" } }}
+              InputLabelProps={{ sx: { color: "white" } }}
+            />
+            <Typography sx={{ color: "white", fontWeight: 600 }}>to</Typography>
+            <TextField
+              label="End Date (YYYY-MM-DD)"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              variant="outlined"
+              sx={{
+                maxWidth: "200px",
+                bgcolor: "rgba(255, 255, 255, 0.05)",
+                borderRadius: "8px",
+                "& .MuiInputBase-input": { color: "#ff9800" },
+                "& .MuiInputLabel-root": { color: "white" },
+                "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+                "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+              }}
+              InputProps={{ style: { color: "#ff9800" } }}
+              InputLabelProps={{ sx: { color: "white" } }}
+            />
+          </>
+        ) : (
+          <TextField
+            label="Relative Time (e.g., -1h, -30m, -2d)"
+            value={relativeTime}
+            onChange={(e) => setRelativeTime(e.target.value)}
+            variant="outlined"
+            sx={{
+              maxWidth: "200px",
+              bgcolor: "rgba(255, 255, 255, 0.05)",
+              borderRadius: "8px",
+              "& .MuiInputBase-input": { color: "#ff9800" },
+              "& .MuiInputLabel-root": { color: "white" },
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+            }}
+            InputProps={{ style: { color: "#ff9800" } }}
+            InputLabelProps={{ sx: { color: "white" } }}
+          />
+        )}
+        <Button
           variant="outlined"
+          onClick={() => setUseRelativeTime(!useRelativeTime)}
           sx={{
-            maxWidth: "200px",
-            bgcolor: "rgba(255, 255, 255, 0.05)",
-            borderRadius: "8px",
-            "& .MuiInputBase-input": { color: "#ff9800" }, // Orange input text
-            "& .MuiInputLabel-root": { color: "white" },
-            "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
-            "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+            color: "white",
+            borderColor: "#3b82f6",
+            "&:hover": { backgroundColor: "#3b82f6" },
           }}
-          InputProps={{ style: { color: "#ff9800" } }}
-          InputLabelProps={{ sx: { color: "white" } }}
-        />
-        <Typography sx={{ color: "white", fontWeight: 600 }}>to</Typography>
-        <TextField
-          label="End Date (YYYY-MM-DD)"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          variant="outlined"
-          sx={{
-            maxWidth: "200px",
-            bgcolor: "rgba(255, 255, 255, 0.05)",
-            borderRadius: "8px",
-            "& .MuiInputBase-input": { color: "#ff9800" }, // Orange input text
-            "& .MuiInputLabel-root": { color: "white" },
-            "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
-            "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
-          }}
-          InputProps={{ style: { color: "#ff9800" } }}
-          InputLabelProps={{ sx: { color: "white" } }}
-        />
+        >
+          {useRelativeTime ? "Use Date Range" : "Use Relative Time"}
+        </Button>
       </Box>
 
-      {/* Compare Button */}
       <Box sx={{ display: "flex", justifyContent: "center", mb: 4 }}>
         <Button
           variant="contained"
@@ -391,7 +530,23 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
         </Button>
       </Box>
 
-      {/* No Results Message */}
+      {/* Description of what this page does */}
+      <Box sx={{ mb: 4, px: 2 }}>
+        <Typography variant="body1" sx={{ color: "white", fontWeight: 600, mb: 1 }}>
+          What this page does:
+        </Typography>
+        <ul style={{ color: "#d3d3d3", paddingLeft: "20px", margin: 0 }}>
+          <li>
+            Generates a diff report for <strong>{service}</strong> in the <strong>{environment}</strong>{" "}
+            environment, covering <strong>{timeRangeDescription}</strong>.
+          </li>
+          <li>Groups all matching diffs by the fields they differ on.</li>
+          <li>Click on "View Diff" to see the different fields.</li>
+          <li>Click on "Humio Link" to see Humio logs for this diff.</li>
+          <li>Click on "View in Diff Explorer" to get more detailed data about the diff.</li>
+        </ul>
+      </Box>
+
       {Object.keys(diffGroups).length === 0 && !loading && (
         <Typography
           variant="body1"
@@ -410,42 +565,41 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
         </Typography>
       )}
 
-      {/* Filter by Fields */}
-      <FormControl
-        sx={{
-          minWidth: "200px",
-          mb: 4,
-          bgcolor: "rgba(255, 255, 255, 0.05)",
-          borderRadius: "8px",
-          "&:hover": { bgcolor: "rgba(255, 255, 255, 0.1)" },
-        }}
-        variant="outlined"
-        disabled={loading || Object.keys(diffGroups).length === 0}
-      >
-        <InputLabel sx={{ color: "white" }}>Filter by Fields</InputLabel>
-        <Select
-          multiple
-          value={filterFields}
-          onChange={handleFilterChange}
-          renderValue={(selected) => (selected as string[]).join(", ")}
-          label="Filter by Fields"
+      <Box sx={{ display: "flex", justifyContent: "center", mb: 4 }}>
+        <FormControl
           sx={{
-            color: "#ff9800", // Orange input text
-            "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
-            "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+            minWidth: "200px",
+            bgcolor: "rgba(255, 255, 255, 0.05)",
+            borderRadius: "8px",
+            "&:hover": { bgcolor: "rgba(255, 255, 255, 0.1)" },
           }}
-          MenuProps={{ PaperProps: { sx: { bgcolor: "#2e2c2c", color: "white" } } }}
+          variant="outlined"
+          disabled={loading || Object.keys(diffGroups).length === 0}
         >
-          {allDiffFields.map((field) => (
-            <MenuItem key={field} value={field}>
-              <Checkbox checked={filterFields.includes(field)} sx={{ color: "white" }} />
-              <ListItemText primary={field} sx={{ color: "white" }} />
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+          <InputLabel sx={{ color: "white" }}>Filter by Fields</InputLabel>
+          <Select
+            multiple
+            value={filterFields}
+            onChange={handleFilterChange}
+            renderValue={(selected) => (selected as string[]).join(", ")}
+            label="Filter by Fields"
+            sx={{
+              color: "#ff9800",
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+            }}
+            MenuProps={{ PaperProps: { sx: { bgcolor: "#2e2c2c", color: "white" } } }}
+          >
+            {allDiffFields.map((field) => (
+              <MenuItem key={field} value={field}>
+                <Checkbox checked={filterFields.includes(field)} sx={{ color: "white" }} />
+                <ListItemText primary={field} sx={{ color: "white" }} />
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
 
-      {/* Diff Table */}
       <Paper
         elevation={8}
         sx={{
@@ -481,7 +635,7 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
                     borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
                   }}
                 >
-                  Diff IDs
+                  Diff ID
                 </TableCell>
                 <TableCell
                   sx={{
@@ -508,9 +662,7 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
                       transition: "all 0.2s ease",
                     }}
                   >
-                    <TableCell sx={{ color: "white", padding: "16px" }}>
-                      {renderStackedFields(groupKey)}
-                    </TableCell>
+                    <TableCell sx={{ color: "white", padding: "16px" }}>{renderStackedFields(groupKey)}</TableCell>
                     <TableCell sx={{ color: "white", padding: "16px" }}>
                       <FormControl
                         sx={{
@@ -520,13 +672,13 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
                         }}
                         variant="outlined"
                       >
-                        <InputLabel sx={{ color: "white" }}>Select Diff ID</InputLabel>
+                        <InputLabel sx={{ color: "white" }}>Diff ID</InputLabel>
                         <Select
                           value={selectedDiffId}
                           onChange={(e) => handleDiffIdChange(groupKey, e)}
-                          label="Select Diff ID"
+                          label="Diff ID"
                           sx={{
-                            color: "#ff9800", // Orange input text
+                            color: "#ff9800",
                             "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
                             "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
                           }}
@@ -578,6 +730,24 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
                         >
                           Humio Link
                         </Button>
+                        <Button
+                          variant="outlined"
+                          onClick={() => handleViewInDiffExplorer(groupKey)}
+                          disabled={loading}
+                          sx={{
+                            color: "white",
+                            borderColor: "#ff9800",
+                            borderRadius: "8px",
+                            padding: "8px 16px",
+                            "&:hover": {
+                              backgroundColor: "#ff9800",
+                              borderColor: "#ff9800",
+                            },
+                            transition: "all 0.3s ease",
+                          }}
+                        >
+                          View in Diff Explorer
+                        </Button>
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -588,12 +758,104 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
         </TableContainer>
       </Paper>
 
-      {/* Loading Indicator */}
       {loading && (
         <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
           <CircularProgress sx={{ color: "white" }} />
         </Box>
       )}
+
+      {/* Dialog for Table View */}
+      <Dialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        maxWidth="md"
+        fullWidth
+        sx={{
+          "& .MuiDialog-paper": {
+            bgcolor: "#1a202c",
+            borderRadius: "16px",
+            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            bgcolor: "rgba(26, 32, 44, 0.8)",
+            color: "white",
+            fontWeight: 600,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            borderTopLeftRadius: "16px",
+            borderTopRightRadius: "16px",
+          }}
+        >
+          Diff Table View - {selectedDiffId}
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              onClick={copyAsCSV}
+              variant="contained"
+              sx={{
+                bgcolor: "#4f4c43",
+                color: "white",
+                borderRadius: "8px",
+                "&:hover": { bgcolor: "#3d3a34", transform: "translateY(-2px)" },
+                transition: "all 0.3s ease",
+              }}
+            >
+              Copy as CSV
+            </Button>
+            <IconButton onClick={() => setOpenDialog(false)} sx={{ color: "white" }}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ bgcolor: "#1a202c", p: 3 }}>
+          {diffTable.length > 0 ? (
+            <TableContainer component={Paper} sx={{ bgcolor: "#1a202c", borderRadius: "8px" }}>
+              <Table sx={{ minWidth: 650 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell
+                      sx={{ color: "white", fontWeight: "bold", borderBottom: "2px solid rgba(255, 255, 255, 0.1)" }}
+                    >
+                      Field Name
+                    </TableCell>
+                    <TableCell
+                      sx={{ color: "white", fontWeight: "bold", borderBottom: "2px solid rgba(255, 255, 255, 0.1)" }}
+                    >
+                      SUN
+                    </TableCell>
+                    <TableCell
+                      sx={{ color: "white", fontWeight: "bold", borderBottom: "2px solid rgba(255, 255, 255, 0.1)" }}
+                    >
+                      LINUX
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {diffTable.map((row) => (
+                    <TableRow
+                      key={row.key}
+                      sx={{
+                        "&:hover": { bgcolor: "rgba(255, 255, 255, 0.05)" },
+                        transition: "all 0.2s ease",
+                      }}
+                    >
+                      <TableCell sx={{ color: row.color, py: 1 }}>{row.key}</TableCell>
+                      <TableCell sx={{ color: row.color, py: 1 }}>{row.sun}</TableCell>
+                      <TableCell sx={{ color: row.color, py: 1 }}>{row.linux}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Typography sx={{ color: "white", textAlign: "center", p: 2 }}>No differences found</Typography>
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };
