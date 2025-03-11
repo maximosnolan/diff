@@ -30,14 +30,6 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import Papa from 'papaparse';
 import { fetchDiffGroups } from "../services/dataService";
 
-const neonStyle = {
-  boxShadow: "0 0 10px rgba(255, 165, 0, 0.7), 0 0 20px rgba(255, 165, 0, 0.5), 0 0 30px rgba(255, 165, 0, 0.3)",
-  transition: "all 0.3s ease",
-  "&:hover": {
-    boxShadow: "0 0 15px rgba(255, 165, 0, 1), 0 0 25px rgba(255, 165, 0, 0.8), 0 0 40px rgba(255, 165, 0, 0.6)",
-  },
-};
-
 interface GenerateReportProps {
   json1?: any | null;
   json2?: any | null;
@@ -211,6 +203,13 @@ const GenerateReport: React.FC<GenerateReportProps> = ({ json1, json2, tolerance
     ));
   };
 
+  const reportDescription = [
+    `Creates a diff report for ${serviceName} in ${environment} from ${startDate} to ${endDate}.`,
+    "Tracks API diff frequency and field-level differences.",
+    "Optionally logs a JIRA ticket with the report if 'Create JIRA' is selected.",
+    "Emails the report to recipients if 'Send Email' is enabled.",
+  ];
+
   return (
     <Box sx={{
       p: 6,
@@ -239,10 +238,10 @@ const GenerateReport: React.FC<GenerateReportProps> = ({ json1, json2, tolerance
               fontWeight: 700,
               textAlign: "center",
               color: "white",
-              background: "linear-gradient(45deg, #ffffff, #b0b0b0)", // Softer gradient
+              background: "linear-gradient(45deg, #ffffff, #b0b0b0)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
-              textShadow: "0 1px 4px rgba(0, 0, 0, 0.2)", // Subtle shadow
+              textShadow: "0 1px 4px rgba(0, 0, 0, 0.2)",
             }}
           >
             Generate Report
@@ -417,6 +416,32 @@ const GenerateReport: React.FC<GenerateReportProps> = ({ json1, json2, tolerance
                 }}
                 InputLabelProps={{ sx: { color: "text.primary", fontWeight: 600 } }}
               />
+            </Box>
+
+            {/* Report Description as Static Text */}
+            <Box sx={{ mt: 3, textAlign: "center" }}>
+              <Typography
+                variant="subtitle1"
+                sx={{ color: "white", fontWeight: 600, mb: 1 }}
+              >
+                What This Report Does:
+              </Typography>
+              {reportDescription.map((desc, index) => (
+                <Typography
+                  key={index}
+                  variant="body2"
+                  sx={{
+                    color: "white",
+                    fontWeight: 500,
+                    textAlign: "left",
+                    display: "list-item",
+                    ml: 4,
+                    mr: 4,
+                  }}
+                >
+                  {desc}
+                </Typography>
+              ))}
             </Box>
 
             <FormGroup sx={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 3 }}>
