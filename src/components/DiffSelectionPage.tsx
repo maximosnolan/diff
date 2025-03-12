@@ -601,163 +601,199 @@ const DiffSelectionPage: React.FC<DiffSelectionPageProps> = ({ onSelectDiffId })
       </Box>
 
       <Paper
-        elevation={8}
-        sx={{
-          bgcolor: "rgba(255, 255, 255, 0.05)",
-          borderRadius: "16px",
-          border: "1px solid rgba(255, 255, 255, 0.1)",
-          transition: "all 0.3s ease",
-          "&:hover": { boxShadow: "0 6px 20px rgba(0, 0, 0, 0.3)" },
-          mb: 3,
-        }}
-      >
-        <TableContainer sx={{ borderRadius: "16px", overflow: "hidden" }}>
-          <Table sx={{ backgroundColor: "#1a202c", color: "white" }}>
-            <TableHead>
-              <TableRow>
-                <TableCell
+  elevation={8}
+  sx={{
+    bgcolor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: "16px",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
+    transition: "all 0.3s ease",
+    "&:hover": { boxShadow: "0 6px 20px rgba(0, 0, 0, 0.3)" },
+    mb: 3,
+  }}
+>
+  <TableContainer sx={{ borderRadius: "16px", overflow: "hidden" }}>
+    <Table sx={{ backgroundColor: "#1a202c", color: "white" }}>
+      <TableHead>
+        <TableRow>
+          <TableCell
+            sx={{
+              color: "white",
+              fontWeight: "bold",
+              backgroundColor: "rgba(46, 44, 44, 0.8)",
+              padding: "16px",
+              borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
+            }}
+          >
+            Diff Group
+          </TableCell>
+          <TableCell
+            sx={{
+              color: "white",
+              fontWeight: "bold",
+              backgroundColor: "rgba(46, 44, 44, 0.8)",
+              padding: "16px",
+              borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
+            }}
+          >
+            Different Fields
+          </TableCell>
+          <TableCell
+            sx={{
+              color: "white",
+              fontWeight: "bold",
+              backgroundColor: "rgba(46, 44, 44, 0.8)",
+              padding: "16px",
+              borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
+              width: "100px", // Set a narrower width
+              whiteSpace: "normal", // Allow text to wrap
+              lineHeight: "1.2", // Tighten line spacing
+              textAlign: "center", // Center the text
+            }}
+          >
+            Number of<br />Similar Diffs
+          </TableCell>
+          <TableCell
+            sx={{
+              color: "white",
+              fontWeight: "bold",
+              backgroundColor: "rgba(46, 44, 44, 0.8)",
+              padding: "16px",
+              borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
+            }}
+          >
+            Diff ID
+          </TableCell>
+          <TableCell
+            sx={{
+              color: "white",
+              fontWeight: "bold",
+              backgroundColor: "rgba(46, 44, 44, 0.8)",
+              padding: "16px",
+              borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
+            }}
+          >
+            Actions
+          </TableCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {Object.entries(filteredDiffGroups || {}).map(([groupKey, diffs], index) => {
+          const selectedDiffId = selectedDiffIds[groupKey] || diffs[0]?.diffId || "";
+          return (
+            <TableRow
+              key={groupKey}
+              sx={{
+                "&:nth-of-type(odd)": { backgroundColor: "rgba(46, 44, 44, 0.6)" },
+                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.1)" },
+                transition: "all 0.2s ease",
+              }}
+            >
+              <TableCell sx={{ color: "white", padding: "16px" }}>{index}</TableCell>
+              <TableCell sx={{ color: "white", padding: "16px" }}>{renderStackedFields(groupKey)}</TableCell>
+              <TableCell
+                sx={{
+                  color: "white",
+                  padding: "16px",
+                  textAlign: "center", // Center the number
+                  width: "100px", // Match header width
+                }}
+              >
+                {diffs.length}
+              </TableCell>
+              <TableCell sx={{ color: "white", padding: "16px" }}>
+                <FormControl
                   sx={{
-                    color: "white",
-                    fontWeight: "bold",
-                    backgroundColor: "rgba(46, 44, 44, 0.8)",
-                    padding: "16px",
-                    borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
+                    minWidth: "200px",
+                    bgcolor: "rgba(255, 255, 255, 0.05)",
+                    borderRadius: "8px",
                   }}
+                  variant="outlined"
                 >
-                  Different Fields
-                </TableCell>
-                <TableCell
-                  sx={{
-                    color: "white",
-                    fontWeight: "bold",
-                    backgroundColor: "rgba(46, 44, 44, 0.8)",
-                    padding: "16px",
-                    borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
-                  }}
-                >
-                  Diff ID
-                </TableCell>
-                <TableCell
-                  sx={{
-                    color: "white",
-                    fontWeight: "bold",
-                    backgroundColor: "rgba(46, 44, 44, 0.8)",
-                    padding: "16px",
-                    borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
-                  }}
-                >
-                  Actions
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {Object.entries(filteredDiffGroups || {}).map(([groupKey, diffs]) => {
-                const selectedDiffId = selectedDiffIds[groupKey] || diffs[0]?.diffId || "";
-                return (
-                  <TableRow
-                    key={groupKey}
+                  <InputLabel sx={{ color: "white" }}>Diff ID</InputLabel>
+                  <Select
+                    value={selectedDiffId}
+                    onChange={(e) => handleDiffIdChange(groupKey, e)}
+                    label="Diff ID"
                     sx={{
-                      "&:nth-of-type(odd)": { backgroundColor: "rgba(46, 44, 44, 0.6)" },
-                      "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.1)" },
-                      transition: "all 0.2s ease",
+                      color: "#ff9800",
+                      "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
+                      "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
+                    }}
+                    MenuProps={{ PaperProps: { sx: { bgcolor: "#2e2c2c", color: "white" } } }}
+                    disabled={loading}
+                  >
+                    {diffs.map((diff) => (
+                      <MenuItem key={diff.diffId} value={diff.diffId} sx={{ color: "white" }}>
+                        {diff.diffId}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </TableCell>
+              <TableCell sx={{ color: "white", padding: "16px" }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  <Button
+                    variant="contained"
+                    onClick={() => handleViewDiffClick(groupKey)}
+                    disabled={loading}
+                    sx={{
+                      background: "linear-gradient(45deg, #1e3a8a, #3b82f6)",
+                      borderRadius: "8px",
+                      padding: "8px 16px",
+                      "&:hover": {
+                        background: "linear-gradient(45deg, #1e40af, #60a5fa)",
+                        transform: "translateY(-2px)",
+                      },
+                      transition: "all 0.3s ease",
                     }}
                   >
-                    <TableCell sx={{ color: "white", padding: "16px" }}>{renderStackedFields(groupKey)}</TableCell>
-                    <TableCell sx={{ color: "white", padding: "16px" }}>
-                      <FormControl
-                        sx={{
-                          minWidth: "200px",
-                          bgcolor: "rgba(255, 255, 255, 0.05)",
-                          borderRadius: "8px",
-                        }}
-                        variant="outlined"
-                      >
-                        <InputLabel sx={{ color: "white" }}>Diff ID</InputLabel>
-                        <Select
-                          value={selectedDiffId}
-                          onChange={(e) => handleDiffIdChange(groupKey, e)}
-                          label="Diff ID"
-                          sx={{
-                            color: "#ff9800",
-                            "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.2)" },
-                            "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3b82f6" },
-                          }}
-                          MenuProps={{ PaperProps: { sx: { bgcolor: "#2e2c2c", color: "white" } } }}
-                          disabled={loading}
-                        >
-                          {diffs.map((diff) => (
-                            <MenuItem key={diff.diffId} value={diff.diffId} sx={{ color: "white" }}>
-                              {diff.diffId}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </TableCell>
-                    <TableCell sx={{ color: "white", padding: "16px" }}>
-                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                        <Button
-                          variant="contained"
-                          onClick={() => handleViewDiffClick(groupKey)}
-                          disabled={loading}
-                          sx={{
-                            background: "linear-gradient(45deg, #1e3a8a, #3b82f6)",
-                            borderRadius: "8px",
-                            padding: "8px 16px",
-                            "&:hover": {
-                              background: "linear-gradient(45deg, #1e40af, #60a5fa)",
-                              transform: "translateY(-2px)",
-                            },
-                            transition: "all 0.3s ease",
-                          }}
-                        >
-                          View Diff
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          onClick={() => handleHumioLinkClick(groupKey)}
-                          disabled={loading}
-                          sx={{
-                            color: "white",
-                            borderColor: "#3b82f6",
-                            borderRadius: "8px",
-                            padding: "8px 16px",
-                            "&:hover": {
-                              backgroundColor: "#3b82f6",
-                              borderColor: "#3b82f6",
-                            },
-                            transition: "all 0.3s ease",
-                          }}
-                        >
-                          Humio Link
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          onClick={() => handleViewInDiffExplorer(groupKey)}
-                          disabled={loading}
-                          sx={{
-                            color: "white",
-                            borderColor: "#ff9800",
-                            borderRadius: "8px",
-                            padding: "8px 16px",
-                            "&:hover": {
-                              backgroundColor: "#ff9800",
-                              borderColor: "#ff9800",
-                            },
-                            transition: "all 0.3s ease",
-                          }}
-                        >
-                          View in Diff Explorer
-                        </Button>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
-
+                    View Diff
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleHumioLinkClick(groupKey)}
+                    disabled={loading}
+                    sx={{
+                      color: "white",
+                      borderColor: "#3b82f6",
+                      borderRadius: "8px",
+                      padding: "8px 16px",
+                      "&:hover": {
+                        backgroundColor: "#3b82f6",
+                        borderColor: "#3b82f6",
+                      },
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    Humio Link
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleViewInDiffExplorer(groupKey)}
+                    disabled={loading}
+                    sx={{
+                      color: "white",
+                      borderColor: "#ff9800",
+                      borderRadius: "8px",
+                      padding: "8px 16px",
+                      "&:hover": {
+                        backgroundColor: "#ff9800",
+                        borderColor: "#ff9800",
+                      },
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    View in Diff Explorer
+                  </Button>
+                </Box>
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  </TableContainer>
+</Paper>
       {loading && (
         <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
           <CircularProgress sx={{ color: "white" }} />
